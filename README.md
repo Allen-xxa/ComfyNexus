@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/icon.png" alt="ComfyNexus Logo" width="120" height="120">
+<img src="icon.png" alt="ComfyNexus Logo" width="120" height="120">
 
 # ComfyNexus
 
@@ -255,3 +255,4 @@ Made with ❤️ by ComfyNexus Team
 [⬆ 返回顶部](#comfynexus)
 
 </div>
+
