@@ -835,14 +835,12 @@ def main():
     
     def tray_exit_app():
         """托盘退出应用回调"""
+        # 与关闭确认弹窗中"关闭程序"走同一退出路径：api.closeApp() 会先设置
+        # _app_exit_requested 放行 on_window_closing 的 closeBehavior 拦截。
+        # 此前直接 window.destroy() 会被该拦截按关闭按钮配置处理，导致
+        # minimize 配置下退不出去、每次询问配置下弹出确认框。
         try:
-            floating_window_manager.destroy()
-            if hasattr(api, '_comfyui_process') and api._comfyui_process:
-                if api._comfyui_process.is_running:
-                    api._comfyui_process.stop()
-            api._system_monitor_controller.close()
-            system_tray_manager.destroy()
-            window.destroy()
+            api.closeApp()
             logger.info("[TrayCallback] 应用已退出")
         except Exception as e:
             logger.error(f"[TrayCallback] 退出应用失败: {e}")
