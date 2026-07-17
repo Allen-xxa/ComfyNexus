@@ -648,6 +648,8 @@ def main():
         # 不影响应用启动，继续运行
     
     # 从已读取的配置中解析窗口大小（避免重复读取配置文件）
+    # 注意：windowSize 存储的是逻辑像素（CSS 像素），与前端保存时的单位一致
+    # （设置页/拖拽调整大小均以逻辑像素写入，maximizeApp 还原、resizeWindow 也按逻辑像素解释）
     default_width, default_height = 1680, 1080
     if settings_data:
         logger.info(f"[窗口大小] settings_data 内容: {settings_data}")
@@ -732,63 +734,69 @@ def main():
         
         logger.debug(f"屏幕尺寸（物理像素）: {screen_width}x{screen_height} (DPI感知: {dpi_aware_set})")
         logger.debug(f"DPI 缩放因子: {dpi_scale}")
-        logger.debug(f"配置的窗口尺寸: {default_width}x{default_height}")
+        logger.debug(f"配置的窗口尺寸（逻辑像素）: {default_width}x{default_height}")
         
         api.set_dpi_scale(dpi_scale)
+        
+        # 配置值为逻辑像素，先转换为物理像素再做屏幕边界检查
+        # （与 api.resizeWindow、_get_settings_window_size 的单位约定保持一致）
+        phys_width = round(default_width * dpi_scale)
+        phys_height = round(default_height * dpi_scale)
         
         # 确保窗口不会超出屏幕范围（留出边距）
         max_width = round(screen_width * 0.95)  # 最大宽度为屏幕的 95%
         max_height = round(screen_height * 0.95)  # 最大高度为屏幕的 95%
         
         # 如果窗口尺寸超出屏幕，自动调整
-        adjusted_width = min(default_width, max_width)
-        adjusted_height = min(default_height, max_height)
+        adjusted_width = min(phys_width, max_width)
+        adjusted_height = min(phys_height, max_height)
         
-        if adjusted_width != default_width or adjusted_height != default_height:
+        if adjusted_width != phys_width or adjusted_height != phys_height:
             safe_print(f"[警告]  窗口尺寸超出屏幕范围，已自动调整:")
-            safe_print(f"   原始尺寸: {default_width}x{default_height}")
+            safe_print(f"   原始尺寸: {phys_width}x{phys_height} (物理像素)")
             safe_print(f"   调整后: {adjusted_width}x{adjusted_height}")
             safe_print(f"   屏幕尺寸: {screen_width}x{screen_height}")
-            logger.info(f"窗口尺寸已调整: {default_width}x{default_height} -> {adjusted_width}x{adjusted_height}")
-            default_width = adjusted_width
-            default_height = adjusted_height
+            logger.info(f"窗口尺寸已调整: {phys_width}x{phys_height} -> {adjusted_width}x{adjusted_height}")
+            phys_width = adjusted_width
+            phys_height = adjusted_height
         
         # 计算居中位置（使用物理像素）
-        x = max(0, (screen_width - default_width) // 2)
-        y = max(0, (screen_height - default_height) // 2)
+        phys_x = max(0, (screen_width - phys_width) // 2)
+        phys_y = max(0, (screen_height - phys_height) // 2)
         
-        # 注意：pywebview 在 DPI 感知模式下可能使用逻辑像素
-        # 需要将物理像素转换为逻辑像素
+        # pywebview 的 create_window 接收逻辑像素
         # 物理像素 = 逻辑像素 * DPI 缩放因子
         # 逻辑像素 = 物理像素 / DPI 缩放因子
-        logical_x = round(x / dpi_scale)
-        logical_y = round(y / dpi_scale)
-        logical_width = round(default_width / dpi_scale)
-        logical_height = round(default_height / dpi_scale)
+        logical_x = round(phys_x / dpi_scale)
+        logical_y = round(phys_y / dpi_scale)
+        logical_width = round(phys_width / dpi_scale)
+        logical_height = round(phys_height / dpi_scale)
         
         # 详细的位置计算日志
         logger.debug(f"窗口位置计算:")
         logger.debug(f"  - 屏幕尺寸（物理）: {screen_width}x{screen_height}")
-        logger.debug(f"  - 窗口尺寸（物理）: {default_width}x{default_height}")
-        logger.debug(f"  - 物理位置: ({x}, {y})")
+        logger.debug(f"  - 窗口尺寸（物理）: {phys_width}x{phys_height}")
+        logger.debug(f"  - 物理位置: ({phys_x}, {phys_y})")
         logger.debug(f"  - 逻辑位置: ({logical_x}, {logical_y})")
         logger.debug(f"  - 逻辑尺寸: {logical_width}x{logical_height}")
         
         safe_print(f"[屏幕] 屏幕尺寸: {screen_width}x{screen_height} (DPI: {system_dpi}, 缩放: {dpi_scale:.2f}x)")
-        safe_print(f"[位置] 窗口位置: ({logical_x}, {logical_y}) 逻辑像素 / ({x}, {y}) 物理像素")
-        safe_print(f"[尺寸] 最终窗口尺寸: {logical_width}x{logical_height} 逻辑像素 / ({default_width}x{default_height} 物理像素)")
-        logger.info(f"[窗口创建] 逻辑尺寸: {logical_width}x{logical_height}, 物理尺寸: {default_width}x{default_height}")
+        safe_print(f"[位置] 窗口位置: ({logical_x}, {logical_y}) 逻辑像素 / ({phys_x}, {phys_y}) 物理像素")
+        safe_print(f"[尺寸] 最终窗口尺寸: {logical_width}x{logical_height} 逻辑像素 / ({phys_width}x{phys_height} 物理像素)")
+        logger.info(f"[窗口创建] 逻辑尺寸: {logical_width}x{logical_height}, 物理尺寸: {phys_width}x{phys_height}")
         
         # 如果位置是 (0, 0)，说明可能有问题
-        if x == 0 and y == 0:
+        if phys_x == 0 and phys_y == 0:
             logger.warning("[警告]  窗口位置计算结果为 (0, 0)，可能是窗口尺寸超出屏幕或 DPI 感知未生效")
     except Exception as e:
-        # 降级方案：使用默认位置
+        # 降级方案：使用默认位置（dpi_scale=1.0 时逻辑像素与物理像素相等）
         logical_x = 100
         logical_y = 100
         logical_width = default_width
         logical_height = default_height
         dpi_scale = 1.0
+        phys_x, phys_y = logical_x, logical_y
+        phys_width, phys_height = logical_width, logical_height
         api.set_dpi_scale(dpi_scale)
         safe_print(f"[警告]  获取屏幕尺寸失败，使用默认位置: ({logical_x}, {logical_y})")
         safe_print(f"   错误详情: {e}")
@@ -1031,12 +1039,8 @@ def main():
                     SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE
                 )
                 
-                # 步骤4：计算物理像素并设置窗口位置和大小
-                phys_x = round(logical_x * dpi_scale)
-                phys_y = round(logical_y * dpi_scale)
-                phys_width = round(logical_width * dpi_scale)
-                phys_height = round(logical_height * dpi_scale)
-                
+                # 步骤4：使用启动时计算好的物理像素设置窗口位置和大小
+                # （直接复用外层的 phys_* 变量，避免逻辑像素往返转换引入舍入误差）
                 user32.SetWindowPos(
                     hwnd, None, phys_x, phys_y, phys_width, phys_height,
                     SWP_NOZORDER | SWP_SHOWWINDOW
