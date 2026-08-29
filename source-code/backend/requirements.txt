@@ -2,7 +2,9 @@
 # Python 3.12.x
 
 # GUI Framework
-pywebview>=6.0,<7.0
+# 6.2 起 winforms 后端的 create_window/resize/move 统一接收逻辑像素（DPI 缩放修复），
+# 窗口尺寸相关代码依赖该语义，不可降级到 6.0/6.1
+pywebview>=6.2,<7.0
 
 # HTTP Server
 flask>=3.0.0
