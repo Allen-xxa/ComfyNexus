@@ -896,12 +896,16 @@ def main():
     # 拦截 ALT+F4 等操作系统级别的窗口关闭事件
     # 使行为与前端 X 按钮一致：根据用户偏好最小化到托盘或退出
     _is_exiting = False
-    _dialog_pending = False
     
     def on_window_closing():
-        nonlocal _is_exiting, _dialog_pending
-        if _is_exiting or _dialog_pending or api._app_exit_requested:
+        nonlocal _is_exiting
+        if _is_exiting or api._app_exit_requested:
             return True
+        
+        # 询问弹窗展示期间的重复关闭请求一律忽略，避免绕过询问直接退出。
+        # 弹窗关闭时前端会调用 resetCloseDialogState() 复位该标志。
+        if api._close_dialog_pending:
+            return False
         
         try:
             result = api._settings_manager.get_settings()
@@ -927,11 +931,17 @@ def main():
                         system_tray_manager.destroy()
                         return True
             
-            _dialog_pending = True
-            _is_exiting = True
-            threading.Timer(0.1, lambda: window.evaluate_js(
-                'window.triggerCloseDialog && window.triggerCloseDialog()'
-            )).start()
+            api._close_dialog_pending = True
+            
+            def _show_close_dialog():
+                try:
+                    window.evaluate_js('window.triggerCloseDialog && window.triggerCloseDialog()')
+                except Exception as e:
+                    # 弹窗触发失败时复位标志，避免后续 ALT+F4 被永久忽略
+                    api._close_dialog_pending = False
+                    logger.error(f"[Closing] 触发关闭确认弹窗失败: {e}")
+            
+            threading.Timer(0.1, _show_close_dialog).start()
             return False
         except Exception as e:
             logger.error(f"[Closing] 处理关闭事件失败: {e}")
