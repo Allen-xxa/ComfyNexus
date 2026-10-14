@@ -6,6 +6,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/utils/toast'
+import { stripAnsi } from '@/utils/ansi'
+import { AnsiLogMessage } from '@/components/common/AnsiLogMessage'
 import { 
   Terminal, 
   Trash2, 
@@ -351,7 +353,7 @@ export default function TerminalPage() {
     }
     
     const logsText = logsToCopy
-      .map(log => `[${log.timestamp}] [${log.level}] ${log.message}`)
+      .map(log => `[${log.timestamp}] [${log.level}] ${stripAnsi(log.message)}`)
       .join('\n')
     
     navigator.clipboard.writeText(logsText)
@@ -441,7 +443,7 @@ export default function TerminalPage() {
         promptPrefix = `以下是 ComfyUI 运行过程中的错误日志（第 ${batchIndex + 1}/${totalBatches} 批），请帮我分析原因并提供解决方案：\n\n`
       }
       
-      const logsText = logs.map(log => `[${log.timestamp}] ${log.message}`).join('\n')
+      const logsText = logs.map(log => `[${log.timestamp}] ${stripAnsi(log.message)}`).join('\n')
       const messageContent = promptPrefix + logsText
       
       const systemPromptContent = comfyuiExpertPreset?.content || null
@@ -776,7 +778,7 @@ export default function TerminalPage() {
                     [{log.level}]
                   </span>
                   <span className={`flex-1 whitespace-pre-wrap break-all ${getLevelColor(log.level)}`}>
-                    {log.message}
+                    <AnsiLogMessage message={log.message} />
                   </span>
                 </div>
               </div>
