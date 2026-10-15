@@ -408,6 +408,17 @@ export function TitleBar() {
     }
   }, [handleClose])
 
+  // 弹窗关闭时复位后端 ALT+F4 弹窗待处理标志（无论选择最小化、退出还是直接关闭弹窗）。
+  // 退出程序路径由 closeApp 设置的 _app_exit_requested 放行，不受此复位影响。
+  const handleCloseConfirmOpenChange = useCallback((open: boolean) => {
+    setShowCloseConfirm(open)
+    if (!open) {
+      bridgeService.resetCloseDialogState().catch((error) => {
+        console.error('[TitleBar] Failed to reset close dialog state:', error)
+      })
+    }
+  }, [])
+
   const handleCloseConfirm = async (dontAskAgain: boolean) => {
     console.log('[TitleBar] handleCloseConfirm called, dontAskAgain:', dontAskAgain)
     try {
@@ -874,7 +885,7 @@ export function TitleBar() {
       {/* 关闭确认对话框 */}
       <CloseConfirmDialog
         open={showCloseConfirm}
-        onOpenChange={setShowCloseConfirm}
+        onOpenChange={handleCloseConfirmOpenChange}
         onClose={handleCloseConfirm}
         onMinimize={handleMinimizeConfirm}
       />

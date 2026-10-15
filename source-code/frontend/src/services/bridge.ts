@@ -147,6 +147,16 @@ class BridgeService implements EnvironmentAPI {
   }
 
   /**
+   * Reset backend close-dialog pending flag (called when the close confirm dialog is dismissed)
+   */
+  async resetCloseDialogState(): Promise<{ success: boolean }> {
+    if (isDevelopment()) {
+      return { success: true };
+    }
+    return this.callApi<{ success: boolean }>('resetCloseDialogState');
+  }
+
+  /**
    * Minimize app
    */
   async minimizeApp() {
