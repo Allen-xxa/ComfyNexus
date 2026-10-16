@@ -1,5 +1,11 @@
 [
   {
+    "tag_name": "v0.41.0",
+    "name": "v0.41.0",
+    "date": "2026-10-15T22:57:45Z",
+    "content": "<h2>What's Changed</h2>\n<ul>\n<li>Add ImageSDRToHDR node. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/16990</li>\n<li>feat: Add a core route for the default workflow (CORE-340) by @alexisrolland in https://github.com/Comfy-Org/ComfyUI/pull/16956</li>\n<li>Add ReferenceMultiLatent node. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17009</li>\n<li>Disable the LoRA stack nodes until the frontend supports DynamicGroup by @jaeone94 in https://github.com/Comfy-Org/ComfyUI/pull/17050</li>\n<li>Improve ReferenceMultiLatent UX a bit. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17053</li>\n<li>Revert \"Disable the LoRA stack nodes until the frontend supports DynamicGroup\" by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17054</li>\n<li>Support MiniMax-H3 LightVAE by @kijai in https://github.com/Comfy-Org/ComfyUI/pull/17049</li>\n<li>Add nodes to get Latent Geometries by @rattus128 in https://github.com/Comfy-Org/ComfyUI/pull/16093</li>\n<li>feat: Add Flux3-image model support (CORE-388) by @kijai in https://github.com/Comfy-Org/ComfyUI/pull/17064</li>\n<li>Update workflow templates to v0.11.84 by @comfyui-wiki in https://github.com/Comfy-Org/ComfyUI/pull/17065</li>\n</ul>\n<p><strong>Full Changelog</strong>: https://github.com/Comfy-Org/ComfyUI/compare/v0.40.0...v0.41.0</p>"
+  },
+  {
     "tag_name": "v0.40.0",
     "name": "v0.40.0",
     "date": "2026-10-13T21:29:16Z",
