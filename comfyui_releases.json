@@ -1,5 +1,17 @@
 [
   {
+    "tag_name": "v0.42.1",
+    "name": "v0.42.1",
+    "date": "2026-10-19T01:33:54Z",
+    "content": "<p>Fix some crashing issues a few users experienced when running the MOSS image template workflow.</p>"
+  },
+  {
+    "tag_name": "v0.42.0",
+    "name": "v0.42.0",
+    "date": "2026-10-18T22:10:38Z",
+    "content": "<h2>What's Changed</h2>\n<ul>\n<li>[Partner Nodes] feat(Krea): add Krea 3 Image node by @bigcat88 in https://github.com/Comfy-Org/ComfyUI/pull/17067</li>\n<li>Update workflow templates to v0.11.85 by @comfyui-wiki in https://github.com/Comfy-Org/ComfyUI/pull/17068</li>\n<li>Use FLUX 3 Image in node display labels by @MaanavD in https://github.com/Comfy-Org/ComfyUI/pull/17075</li>\n<li>Better documentation about the comfy quant format. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17078</li>\n<li>Update workflow templates to v0.11.86 by @comfyui-wiki in https://github.com/Comfy-Org/ComfyUI/pull/17083</li>\n<li>feat: Add MOSS-image support by @kijai in https://github.com/Comfy-Org/ComfyUI/pull/17095</li>\n<li>[Partner Nodes] chore(Quiver): remove retired Arrow 1.x models by @bigcat88 in https://github.com/Comfy-Org/ComfyUI/pull/17102</li>\n<li>Update comfy-kitchen version to 0.2.38 by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17107</li>\n<li>Use fused situ with MOSS-image by @kijai in https://github.com/Comfy-Org/ComfyUI/pull/17099</li>\n<li>Performance improvements for qwen 3.x (Part 2) by @rattus128 in https://github.com/Comfy-Org/ComfyUI/pull/17007</li>\n<li>Update workflow templates to v0.11.87 by @comfyui-wiki in https://github.com/Comfy-Org/ComfyUI/pull/17110</li>\n<li>Fix Qwen think-block templates in TextGenerate by @kijai in https://github.com/Comfy-Org/ComfyUI/pull/17121</li>\n<li>Update workflow templates to v0.11.89 by @comfyui-wiki in https://github.com/Comfy-Org/ComfyUI/pull/17138</li>\n<li>Add ARM Linux to execution and unit tests. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17139</li>\n<li>Refactor 3D model remeshing (CORE-560) by @kijai in https://github.com/Comfy-Org/ComfyUI/pull/16805</li>\n<li>Fix crash issue with solid mode + empty mesh. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17140</li>\n<li>Bump comfyui-frontend-package to 1.55.18 by @comfy-pr-bot in https://github.com/Comfy-Org/ComfyUI/pull/16859</li>\n<li>Fix webcam node no longer working. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17144</li>\n<li>add support for loading embeddings models onto Qwen3.5 by @silveroxides in https://github.com/Comfy-Org/ComfyUI/pull/17159</li>\n<li>Support models with PDD baked in by @kijai in https://github.com/Comfy-Org/ComfyUI/pull/17157</li>\n<li>Make NAF neighborhood attention work per LR cell by @kijai in https://github.com/Comfy-Org/ComfyUI/pull/17155</li>\n<li>Fix text generation not properly cleaning itself up. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17169</li>\n<li>CPU device doesn't support fp8, nvfp4, mxfp8 or int8. by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17170</li>\n<li>Update comfy-kitchen version to 0.2.39 by @comfyanonymous in https://github.com/Comfy-Org/ComfyUI/pull/17171</li>\n</ul>\n<h2>New Contributors</h2>\n<ul>\n<li>@MaanavD made their first contribution in https://github.com/Comfy-Org/ComfyUI/pull/17075</li>\n</ul>\n<p><strong>Full Changelog</strong>: https://github.com/Comfy-Org/ComfyUI/compare/v0.41.0...v0.42.0</p>"
+  },
+  {
     "tag_name": "v0.41.0",
     "name": "v0.41.0",
     "date": "2026-10-15T22:57:45Z",
