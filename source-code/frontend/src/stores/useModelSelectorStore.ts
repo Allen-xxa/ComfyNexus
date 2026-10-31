@@ -45,11 +45,25 @@ export const useModelSelectorStore = create<ModelSelectorStore>((set, get) => ({
       
       const response = await window.pywebview.api.ai_get_default_config()
       
-      if (response.success) {
+      if (response.success && response.config_id) {
         set({ defaultConfigId: response.config_id })
-      } else {
-        throw new Error(response.error_message || '获取默认配置失败')
+        return
       }
+      
+      // 未设置默认配置时回退到已有配置。
+      // 此前只要用户没手动点过「设为默认」，defaultConfigId 就恒为 null，
+      // 导致终端日志分析等功能误报「请先配置 API 密钥」，即使配置本身可用。
+      const listResult = await window.pywebview.api.ai_list_configs()
+      if (listResult?.success && Array.isArray(listResult.configs) && listResult.configs.length > 0) {
+        const preferred =
+          listResult.configs.find((c: any) => c.status === 'available') ??
+          listResult.configs.find((c: any) => c.is_default) ??
+          listResult.configs[0]
+        set({ defaultConfigId: preferred.id })
+        return
+      }
+      
+      set({ defaultConfigId: null })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '获取默认配置失败'
       get()._setError(errorMessage)
