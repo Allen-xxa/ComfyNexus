@@ -18,7 +18,7 @@ import { useAIStore } from '@/stores/useAIStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Plus, Trash2, MessageSquare, Upload } from 'lucide-react'
+import { Plus, Trash2, MessageSquare, Upload, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ExportDialog } from './ExportDialog'
 import { DeleteTopicDialog } from './DeleteTopicDialog'
@@ -282,6 +282,20 @@ export const TopicList: React.FC = () => {
                 {/* 操作按钮（悬停时显示） */}
                 {editingTopicId !== topic.id && (
                   <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    {/* 重命名按钮：双击话题名同样可进入编辑，此处提供可见入口 */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="hover:bg-muted-foreground/10 size-6 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDoubleClick(topic.id, topic.name)
+                      }}
+                      title="重命名"
+                    >
+                      <Pencil className="text-muted-foreground size-3" />
+                    </Button>
+                    
                     {/* 导出按钮 */}
                     {(topic.message_count ?? 0) > 0 && (
                       <Button
