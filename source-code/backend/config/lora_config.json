@@ -29,20 +29,12 @@
   },
   "civitai": {
     "enabled": true,
-    "api_key": "1a86fdc338ad8ef86c734d17b4871a48",
+    "api_key": "",
     "preview_download_limit": 5,
     "auto_sync": false,
     "sync_interval_hours": 24
   },
-  "scan_paths": [
-    {
-      "id": "21726c7d-c76d-4c14-8873-98b4dbe53a72",
-      "path": "G:\\ComfyUI\\ComfyUI_FileStore\\models\\loras\\cyber",
-      "name": "LoRA Models",
-      "category": "uncategorized",
-      "enabled": true
-    }
-  ],
+  "scan_paths": [],
   "metadata_cache": {
     "enabled": true,
     "cache_days": 30

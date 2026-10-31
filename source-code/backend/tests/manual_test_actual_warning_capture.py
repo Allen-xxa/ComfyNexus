@@ -4,11 +4,12 @@
 使用 ComfyUI 环境的 Python 来测试
 """
 
+import os
 import subprocess
 import sys
 
-# ComfyUI 环境的 Python 路径
-COMFYUI_PYTHON = r"G:\ComfyUI_Test_Env_B\python_embeded\python.exe"
+# ComfyUI 环境的 Python 路径，通过环境变量 COMFYUI_PYTHON 指定
+COMFYUI_PYTHON = os.environ.get("COMFYUI_PYTHON", "")
 
 
 def test_warning_capture():

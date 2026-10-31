@@ -1,10 +1,8 @@
 {
   "version": "1.0.0",
-  "use_global_path": true,
-  "global_path": "G:\\ComfyUI\\ComfyUI_FileStore\\user\\default\\workflows",
+  "use_global_path": false,
+  "global_path": "",
   "env_paths": {
-    "ca5b23d2-af7f-49ac-b1b3-87ec972ca413": "G:\\ComfyUI\\ComfyUI_Test_Env_B\\ComfyUI\\user\\default\\workflows",
-    "17f5d778-88d0-48e8-84d1-bfcce161c3bd": "G:\\ComfyUI\\ComfyUI-aki-v2\\ComfyUI\\user\\default\\workflows",
-    "7732af6e-5738-4c02-bb90-1d4ff622c4c9": "G:\\ComfyUI_windows\\user\\default\\workflows"
+    "dd0cb8a3-b7ed-4f9c-83ac-7a7f4bad8e66": "F:\\comfyUI\\ComfyUI-QiQ-V1.0\\ComfyUI\\user\\default\\workflows"
   }
 }
