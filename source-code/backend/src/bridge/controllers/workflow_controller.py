@@ -269,6 +269,14 @@ class WorkflowController:
             content = file_path.read_text(encoding="utf-8")
             data = json.loads(content)
             
+            # 工作流目录里可能混入非工作流 JSON（如预设列表、配置片段），
+            # 顶层不是字典时直接跳过，避免整条加载链路抛异常并刷屏 ERROR 日志
+            if not isinstance(data, dict):
+                logger.warning(
+                    f"跳过非工作流 JSON: {file_path.name}（顶层类型 {type(data).__name__}）"
+                )
+                return None
+            
             rel_path = file_path.relative_to(self._workflows_dir)
             filename = str(rel_path).replace("\\", "/")
             

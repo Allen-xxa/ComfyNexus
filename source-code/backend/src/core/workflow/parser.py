@@ -326,9 +326,25 @@ class WorkflowParser:
             return None
 
     @staticmethod
-    def extract_node_count(data: Dict[str, Any]) -> int:
-        """提取节点数量"""
-        return len(data.get("nodes", []))
+    def extract_node_count(data: Any) -> int:
+        """
+        提取节点数量
+
+        兼容多种顶层结构，避免单个异常文件导致整条加载链路报错：
+        - UI 格式：{"nodes": [...], "links": [...], ...}
+        - API 格式：{"1": {"class_type": "...", "inputs": {...}}, ...}
+        - 其他（如预设列表、非工作流 JSON）：返回 0
+        """
+        if isinstance(data, dict):
+            nodes = data.get("nodes")
+            if isinstance(nodes, list):
+                return len(nodes)
+            # API 格式没有 nodes 字段，按 class_type 条目计数
+            return sum(
+                1 for value in data.values()
+                if isinstance(value, dict) and "class_type" in value
+            )
+        return 0
 
     @staticmethod
     def extract_plugins(data: Dict[str, Any]) -> List[Dict[str, Any]]:
