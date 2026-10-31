@@ -226,6 +226,8 @@ test_cache/
 # Temporary test files
 test_*.py
 !backend/tests/test_*.py
+# 例外必须覆盖嵌套目录，否则 tests/unit/**、tests/integration/** 下的测试文件会被静默忽略
+!backend/tests/**/test_*.py
 !frontend/src/**/*.test.ts
 !frontend/src/**/*.test.tsx
 

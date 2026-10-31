@@ -138,11 +138,14 @@ celerybeat.pid
 .env
 .envrc
 .venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# 以下规则必须加锚点：Windows 下 Git 忽略匹配不区分大小写，
+# 未锚定的 env/ 与 ENV/ 会连带吞掉嵌套源码目录（如 source-code/backend/src/core/env/），
+# 导致该包内新增文件被静默忽略。
+/env/
+/venv/
+/ENV/
+/env.bak/
+/venv.bak/
 
 # Spyder project settings
 .spyderproject
