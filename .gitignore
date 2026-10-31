@@ -208,3 +208,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# WorkBuddy 助手工作区（记忆、截图等本地数据）
+.workbuddy-ai/
