@@ -2321,6 +2321,108 @@ class Api:
         """
         return self._environment_controller.generate_model_paths_yaml(env_id)
     
+    def read_model_paths_yaml(self, comfyui_path: str):
+        """
+        读取 ComfyUI 根目录下 extra_model_paths.yaml 的原始内容
+
+        「模型路径」页改为直接展示与编辑真实文件，不再维护一份与文件脱钩的表单配置。
+
+        Args:
+            comfyui_path: ComfyUI 根目录
+
+        Returns:
+            dict: {success, path, exists, content, error_message}
+        """
+        try:
+            if not comfyui_path:
+                return {
+                    "success": False,
+                    "error_code": "PATH_REQUIRED",
+                    "error_message": "未配置 ComfyUI 路径"
+                }
+            
+            yaml_path = Path(comfyui_path) / "extra_model_paths.yaml"
+            if not yaml_path.exists():
+                return {
+                    "success": True,
+                    "path": str(yaml_path),
+                    "exists": False,
+                    "content": ""
+                }
+            
+            return {
+                "success": True,
+                "path": str(yaml_path),
+                "exists": True,
+                "content": yaml_path.read_text(encoding="utf-8")
+            }
+        except Exception as e:
+            logger.error(f"[read_model_paths_yaml] 读取失败: {e}")
+            return {
+                "success": False,
+                "error_code": "READ_FAILED",
+                "error_message": str(e)
+            }
+    
+    def write_model_paths_yaml(self, comfyui_path: str, content: str):
+        """
+        直接写入 extra_model_paths.yaml
+
+        写入前会校验 YAML 语法并备份原文件，避免用户编辑出错导致 ComfyUI 启动失败。
+
+        Args:
+            comfyui_path: ComfyUI 根目录
+            content: 完整的 YAML 文本
+
+        Returns:
+            dict: {success, path, backup_path, error_message}
+        """
+        try:
+            import shutil
+            from datetime import datetime
+            import yaml as _yaml
+            
+            if not comfyui_path:
+                return {
+                    "success": False,
+                    "error_code": "PATH_REQUIRED",
+                    "error_message": "未配置 ComfyUI 路径"
+                }
+            
+            # 语法校验：空内容视为清空，允许通过
+            if content and content.strip():
+                try:
+                    _yaml.safe_load(content)
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "error_code": "INVALID_YAML",
+                        "error_message": f"YAML 格式错误: {e}"
+                    }
+            
+            yaml_path = Path(comfyui_path) / "extra_model_paths.yaml"
+            backup_path = None
+            
+            if yaml_path.exists():
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = yaml_path.with_name(f"extra_model_paths.yaml.bak_{stamp}")
+                shutil.copy2(yaml_path, backup_path)
+            
+            yaml_path.write_text(content, encoding="utf-8")
+            
+            return {
+                "success": True,
+                "path": str(yaml_path),
+                "backup_path": str(backup_path) if backup_path else None
+            }
+        except Exception as e:
+            logger.error(f"[write_model_paths_yaml] 写入失败: {e}")
+            return {
+                "success": False,
+                "error_code": "WRITE_FAILED",
+                "error_message": str(e)
+            }
+    
     def detect_model_paths_structure(self, path):
         """
         检测目录结构，识别模型路径配置
@@ -6210,6 +6312,19 @@ class Api:
         
         config_result = self._lora_config_manager.get_scan_paths()
         scan_paths = config_result.get("paths", [])
+        
+        # 合并 ComfyUI 默认 loras 目录与 extra_model_paths.yaml 扩展的 loras 目录，
+        # 否则通过 extra_model_paths.yaml 共享的 LoRA 在管理页里完全不可见
+        try:
+            from backend.src.core.lora.path_resolver import build_scan_paths
+            
+            current_env = self._environment_controller.manager.get_current_environment()
+            if current_env:
+                comfyui_path = current_env.config.general.comfyui_path
+                extra_yaml = current_env.config.acceleration.extra_model_paths_config or None
+                scan_paths = build_scan_paths(scan_paths, comfyui_path, extra_yaml)
+        except Exception as e:
+            logger.warning(f"[lora_sync_models] 合并扩展 LoRA 路径失败，使用原有路径: {e}")
         
         scanner = LoraScanner()
         return scanner.sync_models(scan_paths)
