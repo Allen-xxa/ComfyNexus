@@ -10,7 +10,7 @@ import asyncio
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # 直接导入网络工具函数（避免导入整个 AI 模块）
