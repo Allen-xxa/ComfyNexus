@@ -163,10 +163,7 @@ export const TabContainer = forwardRef<AccelerationTabRef, TabContainerProps & {
           />
         )}
         {activeTab === 'modelPaths' && (
-          <ModelPathsTab
-            configs={config.modelPathConfigs || []}
-            onConfigsChange={(configs) => onConfigChange({ modelPathConfigs: configs })}
-          />
+          <ModelPathsTab comfyuiPath={config.general?.comfyuiPath || ''} />
         )}
         {activeTab === 'advancedEnv' && (
           <AdvancedEnvTab
