@@ -98,6 +98,9 @@ class AIService:
         if not topic:
             raise ValueError(f"话题不存在: {topic_id}")
         
+        # 首次对话时用用户的首条消息生成话题标题，替换默认的「新对话」
+        self._maybe_auto_title(topic_id, topic.name, content)
+        
         # 验证消息内容（允许只有文件而没有文本）
         if (not content or not content.strip()) and (not files or len(files) == 0):
             raise ValueError("消息内容和文件不能同时为空")
@@ -629,6 +632,46 @@ class AIService:
         return topic_id in self._cancel_flags
 
     
+    # 视为「未命名」的话题标题，命中时允许自动改写
+    _DEFAULT_TOPIC_NAMES = {"新对话", "新话题", "new chat", "new topic", ""}
+
+    @staticmethod
+    def _derive_topic_title(content: str, max_len: int = 20) -> str:
+        """从用户首条消息推导话题标题"""
+        text = " ".join((content or "").split())
+        if not text:
+            return ""
+
+        # 去掉常见祈使前缀，让标题更接近主题本身
+        for prefix in ("请帮我", "帮我", "麻烦", "请", "你能", "可以", "我想"):
+            if text.startswith(prefix) and len(text) > len(prefix) + 4:
+                text = text[len(prefix):].lstrip("，,。. ：: ")
+                break
+
+        if len(text) > max_len:
+            return text[:max_len] + "…"
+        return text
+
+    def _maybe_auto_title(self, topic_id: str, current_name: str, content: str) -> None:
+        """
+        话题仍为默认名称时，用首条用户消息自动命名
+
+        原实现只在创建话题时写入「新对话」，之后永不更新，
+        导致左侧话题列表全是同名条目，无法区分。
+        """
+        try:
+            if (current_name or "").strip().lower() not in self._DEFAULT_TOPIC_NAMES:
+                return
+
+            title = self._derive_topic_title(content)
+            if not title:
+                return
+
+            if self.topic_manager.rename_topic(topic_id, title):
+                logger.info(f"[AI Service] 已自动命名话题: {title}")
+        except Exception as e:
+            logger.warning(f"[AI Service] 自动命名话题失败: {e}")
+
     def _format_search_results(self, results) -> str:
         """格式化搜索结果为文本（用于AI上下文）
         
