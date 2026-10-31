@@ -1180,7 +1180,21 @@ def main():
     #                     pythonnet 在 PyInstaller 打包后可能出现 DLL 加载失败问题
     logger.info("[主窗口] 准备启动 WebView2 窗口...")
     safe_print("[主窗口] 正在启动 WebView2，请稍候...")
-    webview.start(func=on_webview_ready, debug=True, private_mode=False, gui='edgechromium')
+
+    # 窗口图标：未指定时 pywebview 会从 sys.executable 提取，
+    # 开发模式下即为 python.exe 的图标，故显式传入项目自带的 .ico
+    _icon_path = base_path / "icon.ico"
+    _icon_arg = str(_icon_path) if _icon_path.exists() else None
+    if _icon_arg:
+        logger.info(f"[主窗口] 使用窗口图标: {_icon_arg}")
+
+    webview.start(
+        func=on_webview_ready,
+        debug=True,
+        private_mode=False,
+        gui='edgechromium',
+        icon=_icon_arg,
+    )
     logger.info("[主窗口] WebView2 窗口已关闭")
     
     # 等待健康检查线程完成（非 daemon，避免被提前杀死）
