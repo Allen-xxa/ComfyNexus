@@ -192,19 +192,6 @@
 
 <div align="center">
 
-## ☕ 支持作者
 
-如果 ComfyNexus 对你有帮助，欢迎请作者喝杯咖啡
-
-<!-- 赞助二维码位置：将下方图片链接替换为你的赞助二维码 -->
-<img src="wx.png" alt="赞助" width="180">
-
----
-
-## 🤝 参与贡献
-
-欢迎提交 [Issue](https://github.com/Allen-xxa/ComfyNexus/issues) 或 [Pull Request](https://github.com/Allen-xxa/ComfyNexus/pulls)
-
-**Made with ❤️ by ComfyNexus Team**
 
 </div>
