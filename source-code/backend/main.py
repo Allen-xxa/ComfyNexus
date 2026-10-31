@@ -547,6 +547,12 @@ def main():
     
     # 获取前端构建目录
     dist_dir = base_path / "dist"
+    # PyInstaller onedir 模式会把资源放在 _internal/ 下；onefile 模式放在 _MEIPASS 下
+    if getattr(sys, 'frozen', False) and not dist_dir.exists():
+        _frozen_base = Path(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else base_path / "_internal"
+        _alt_dist = _frozen_base / "dist"
+        if _alt_dist.exists():
+            dist_dir = _alt_dist
     index_html = dist_dir / "index.html"
     
     safe_print("=" * 60)
@@ -1184,6 +1190,12 @@ def main():
     # 窗口图标：未指定时 pywebview 会从 sys.executable 提取，
     # 开发模式下即为 python.exe 的图标，故显式传入项目自带的 .ico
     _icon_path = base_path / "icon.ico"
+    # PyInstaller onedir 模式图标在 _internal/ 下；onefile 模式在 _MEIPASS 下
+    if getattr(sys, 'frozen', False) and not _icon_path.exists():
+        _frozen_base = Path(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else base_path / "_internal"
+        _alt_icon = _frozen_base / "icon.ico"
+        if _alt_icon.exists():
+            _icon_path = _alt_icon
     _icon_arg = str(_icon_path) if _icon_path.exists() else None
     if _icon_arg:
         logger.info(f"[主窗口] 使用窗口图标: {_icon_arg}")
