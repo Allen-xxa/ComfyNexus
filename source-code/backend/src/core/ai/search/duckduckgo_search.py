@@ -16,6 +16,7 @@ from .base_search import (
     SearchError,
     SearchTimeoutError
 )
+from .proxy_resolver import resolve_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,15 @@ class DuckDuckGoSearch(BaseSearch):
         Returns:
             搜索结果列表
         """
-        with DDGS() as ddgs:
+        # ddgs 9.x 的搜索后端包含 startpage 等站点，境内直连会超时，
+        # 必须复用应用/系统代理，否则一律报 operation timed out
+        proxy = resolve_proxy(self.config.get("proxy"))
+        if proxy:
+            logger.info(f"[DuckDuckGo] 使用代理: {proxy}")
+        else:
+            logger.warning("[DuckDuckGo] 未检测到可用代理，境内网络下可能超时")
+
+        with DDGS(proxy=proxy or None) as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
             return [
                 SearchResult(

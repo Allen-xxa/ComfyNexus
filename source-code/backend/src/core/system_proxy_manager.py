@@ -61,27 +61,38 @@ class SystemProxyManager:
             
             host = ""
             port = ""
+            scheme = "http"
             
             if proxy_server:
-                if '=' in proxy_server:
-                    for part in proxy_server.split(';'):
-                        if part.startswith('http='):
-                            proxy_server = part.split('=')[1]
+                raw = proxy_server.strip()
+                # 形如 "http=127.0.0.1:7890;https=127.0.0.1:7890" 时只取 http 段
+                if '=' in raw:
+                    for part in raw.split(';'):
+                        if part.strip().startswith('http='):
+                            raw = part.split('=', 1)[1].strip()
                             break
                 
-                if ':' in proxy_server:
-                    parts = proxy_server.split(':')
-                    host = parts[0]
-                    port = parts[1]
+                # 注册表里可能带协议前缀（如 http://127.0.0.1:29290），
+                # 必须先剥离，否则按冒号切分会把 "http" 当成主机名
+                if '://' in raw:
+                    scheme, raw = raw.split('://', 1)
+                    scheme = scheme or "http"
+                
+                if ':' in raw:
+                    host, port = raw.rsplit(':', 1)
                 else:
-                    host = proxy_server
-                    port = "80"
+                    host, port = raw, "80"
+                
+                host = host.strip()
+                port = port.strip()
             
             return {
                 "success": True,
                 "enabled": bool(proxy_enable),
                 "host": host,
-                "port": port
+                "port": port,
+                "scheme": scheme,
+                "url": f"{scheme}://{host}:{port}" if host else ""
             }
             
         except Exception as e:
