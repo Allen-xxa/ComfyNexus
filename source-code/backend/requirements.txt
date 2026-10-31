@@ -20,6 +20,9 @@ websockets>=12.0
 # System Monitoring
 psutil>=5.9.0
 GPUtil>=1.4.0
+# GPUtil 1.4.0 内部 import distutils，而 Python 3.12 已从标准库移除该模块，
+# 缺少 setuptools 提供的兼容层会导致启动即 ModuleNotFoundError
+setuptools>=68.0.0
 
 # GPU Monitoring (NVIDIA)
 pynvml>=11.5.0
