@@ -264,3 +264,9 @@ test_*.py
 # Local configuration
 *.local
 frontend/tsconfig.tsbuildinfo
+
+# 搜索配置含用户 API Key（Tavily / Google），属本机数据
+backend/config/search_config.json
+# 工作流与默认配置含本机环境路径，属运行时状态
+backend/config/workflow_config.json
+backend/config/default_config.json
