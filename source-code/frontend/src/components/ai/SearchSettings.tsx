@@ -204,10 +204,41 @@ export function SearchSettings({ open, onOpenChange }: SearchSettingsProps) {
                   </div>
                 </div>
               </div>
+              
+              {/* Tavily */}
+              <div 
+                className={cn(
+                  "flex items-start space-x-3 p-4 rounded-lg border transition-colors cursor-pointer",
+                  localConfig.provider === 'tavily'
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                )}
+                onClick={() => updateField('provider', 'tavily')}
+              >
+                {/* eslint-disable-next-line no-restricted-syntax */}
+                <input
+                  type="radio"
+                  name="provider"
+                  value="tavily"
+                  checked={localConfig.provider === 'tavily'}
+                  onChange={() => updateField('provider', 'tavily')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="font-semibold text-foreground">
+                    Tavily
+                    <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                      推荐
+                    </span>
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    面向 AI 的搜索 API，结果已抽取正文，每月 1000 次免费额度
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          
-          {/* Google 配置 */}
+
           {localConfig.provider === 'google' && (
             <div className="space-y-4 rounded-lg border border-border bg-muted p-4">
               <div className="space-y-2">
@@ -252,6 +283,34 @@ export function SearchSettings({ open, onOpenChange }: SearchSettingsProps) {
                     <ExternalLink className="size-3" />
                   </a>
                   {' '}· 获取 Search Engine ID
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {/* Tavily 配置 */}
+          {localConfig.provider === 'tavily' && (
+            <div className="space-y-4 rounded-lg border border-border bg-muted p-4">
+              <div className="space-y-2">
+                <Label htmlFor="tavily-api-key">API Key</Label>
+                <Input
+                  id="tavily-api-key"
+                  type="password"
+                  placeholder="tvly-..."
+                  value={localConfig.providers.tavily?.api_key ?? ''}
+                  onChange={(e) => updateField('providers.tavily.api_key', e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  <a
+                    href="https://app.tavily.com/home"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    获取 Tavily API Key
+                    <ExternalLink className="size-3" />
+                  </a>
+                  {' '}· 注册后可在控制台复制，格式为 tvly- 开头
                 </p>
               </div>
             </div>

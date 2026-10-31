@@ -4,6 +4,7 @@
 管理搜索配置的读取、保存、验证。
 """
 
+import copy
 import json
 import logging
 from pathlib import Path
@@ -29,6 +30,11 @@ class SearchConfig:
                 "enabled": False,
                 "api_key": "",
                 "search_engine_id": ""
+            },
+            "tavily": {
+                "enabled": False,
+                "api_key": "",
+                "search_depth": "basic"
             }
         }
     }
@@ -56,7 +62,10 @@ class SearchConfig:
     
     def load(self) -> Dict[str, Any]:
         """加载配置
-        
+
+        会把新增 provider 的默认值合并进来，避免旧配置文件缺少字段
+        导致前端读取 providers.tavily 时报错。
+
         Returns:
             配置字典
         """
@@ -64,11 +73,27 @@ class SearchConfig:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
                 logger.debug(f"配置加载成功: {self.config_file}")
-                return config
+                return self._merge_defaults(config)
         except Exception as e:
             logger.error(f"加载搜索配置失败: {e}", exc_info=True)
             logger.info("使用默认配置")
-            return self.DEFAULT_CONFIG.copy()
+            return copy.deepcopy(self.DEFAULT_CONFIG)
+
+    def _merge_defaults(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """把默认配置合并进已加载的配置"""
+        merged = copy.deepcopy(self.DEFAULT_CONFIG)
+        merged.update({k: v for k, v in config.items() if k != 'providers'})
+
+        existing = config.get('providers') or {}
+        providers = merged.get('providers', {})
+        for name, defaults in self.DEFAULT_CONFIG['providers'].items():
+            providers[name] = {**defaults, **(existing.get(name) or {})}
+        # 保留用户自行添加的其他 provider
+        for name, value in existing.items():
+            if name not in providers:
+                providers[name] = value
+        merged['providers'] = providers
+        return merged
     
     def save(self, config: Dict[str, Any]) -> bool:
         """保存配置
@@ -104,7 +129,7 @@ class SearchConfig:
                 return False, f"缺少必需字段: {field}"
         
         # 验证provider
-        if config['provider'] not in ['duckduckgo', 'google']:
+        if config['provider'] not in ['duckduckgo', 'google', 'tavily']:
             return False, f"无效的搜索引擎: {config['provider']}"
         
         # 验证max_results
@@ -122,6 +147,12 @@ class SearchConfig:
                 return False, "Google搜索需要API Key"
             if not google_config.get('search_engine_id'):
                 return False, "Google搜索需要Search Engine ID"
+        
+        # 验证 Tavily 配置
+        if config['provider'] == 'tavily':
+            tavily_config = config.get('providers', {}).get('tavily', {})
+            if not tavily_config.get('api_key'):
+                return False, "Tavily搜索需要API Key"
         
         return True, "配置有效"
     

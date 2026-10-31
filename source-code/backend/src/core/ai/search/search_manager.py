@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from .base_search import BaseSearch, SearchResult, SearchError
 from .duckduckgo_search import DuckDuckGoSearch
 from .google_search import GoogleSearch
+from .tavily_search import TavilySearch
 from .search_config import SearchConfig
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,15 @@ class SearchManager:
                 logger.info("Google搜索引擎已初始化")
             except Exception as e:
                 logger.error(f"初始化Google失败: {e}")
+        
+        # 初始化 Tavily（如果配置了 API Key）
+        tavily_config = config.get('providers', {}).get('tavily', {})
+        if tavily_config.get('api_key'):
+            try:
+                self._providers['tavily'] = TavilySearch(tavily_config)
+                logger.info("Tavily搜索引擎已初始化")
+            except Exception as e:
+                logger.error(f"初始化Tavily失败: {e}")
     
     async def search(
         self, 
@@ -152,6 +162,10 @@ class SearchManager:
                 if not config:
                     return False, "需要提供Google配置", 0.0
                 engine = GoogleSearch(config)
+            elif provider == 'tavily':
+                if not config or not config.get('api_key'):
+                    return False, "Tavily搜索需要API Key", 0.0
+                engine = TavilySearch(config)
             else:
                 return False, f"未知的搜索引擎: {provider}", 0.0
             

@@ -73,6 +73,11 @@ export const useSearchStore = create<SearchStore>()(
                   enabled: false,
                   api_key: '',
                   search_engine_id: ''
+                },
+                tavily: {
+                  enabled: false,
+                  api_key: '',
+                  search_depth: 'basic'
                 }
               }
             }

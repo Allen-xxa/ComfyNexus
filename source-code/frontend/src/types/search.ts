@@ -5,7 +5,7 @@
 /**
  * 搜索引擎类型
  */
-export type SearchProvider = 'duckduckgo' | 'google'
+export type SearchProvider = 'duckduckgo' | 'google' | 'tavily'
 
 /**
  * 搜索结果接口
@@ -33,6 +33,11 @@ export interface SearchConfig {
       enabled: boolean
       api_key: string
       search_engine_id: string
+    }
+    tavily: {
+      enabled: boolean
+      api_key: string
+      search_depth?: string
     }
   }
 }
