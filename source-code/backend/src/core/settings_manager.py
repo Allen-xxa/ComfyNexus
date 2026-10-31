@@ -43,7 +43,8 @@ class SettingsManager(ConfigMigrator):
             "version": self.CURRENT_VERSION,
             "general": {
                 "configMode": "preset",
-                "autoUpdate": True,
+                # 二次开发分支：更新源仍指向原作者仓库，开启后会自动下载覆盖本地修改，故默认关闭
+                "autoUpdate": False,
                 "comfyuiStartupAction": "workspace",
                 "selectedBrowser": "",  # 空字符串表示使用系统默认浏览器
                 "titleBarDoubleClickAction": "maximize",

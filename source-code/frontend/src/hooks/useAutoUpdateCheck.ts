@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useAppUpdateStore } from '@/stores/useAppUpdateStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 
 const CHECK_INTERVAL = 10 * 60 * 1000 // 10 分钟
 const INITIAL_DELAY = 2000 // 启动后 2 秒
@@ -13,6 +14,10 @@ export function useAutoUpdateCheck() {
     setChecking,
     hasViewed
   } = useAppUpdateStore()
+
+  // 尊重「系统设置 → 自动更新」开关。
+  // 该开关此前只存不读，导致无论是否关闭都会在启动后自动检查更新。
+  const autoUpdate = useSettingsStore((state) => state.systemSettings?.autoUpdate ?? false)
   
   const isCheckingRef = useRef(isChecking)
   const hasCheckedRef = useRef(false)
@@ -61,6 +66,11 @@ export function useAutoUpdateCheck() {
   }, [setHasUpdate, setChecking])
 
   useEffect(() => {
+    if (!autoUpdate) {
+      console.log('[AutoUpdateCheck] 自动更新已关闭，跳过启动检查与定时轮询')
+      return
+    }
+
     if (hasCheckedRef.current) {
       return
     }
@@ -105,7 +115,7 @@ export function useAutoUpdateCheck() {
         clearInterval(intervalId)
       })
     }
-  }, [checkForUpdate])
+  }, [checkForUpdate, autoUpdate])
 
   return {
     hasUpdate,

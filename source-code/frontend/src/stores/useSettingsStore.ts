@@ -97,7 +97,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   
   systemSettings: {
     configMode: 'preset',
-    autoUpdate: true,
+    // 本仓库为二次开发分支，更新源仍指向原作者仓库，开启自动更新会覆盖本地修改，故默认关闭
+    autoUpdate: false,
     comfyuiStartupAction: 'workspace',  // 默认在工作台打开
     selectedBrowser: '',  // 默认使用系统浏览器
     closeButtonAction: 'ask',
