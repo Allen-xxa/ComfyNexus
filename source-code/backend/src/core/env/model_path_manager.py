@@ -15,6 +15,12 @@ import yaml
 from .types import ModelPathConfig
 from ...utils.logger import app_logger as logger
 
+# 写入 YAML 时置于首行的归属标记。
+# 只有带该标记的文件才被认为是本应用生成的，允许在「无配置」时清理；
+# 用户手工维护的 extra_model_paths.yaml 不含此标记，任何情况下都不会被自动删除。
+YAML_OWNERSHIP_MARKER = "# 本文件由 ComfyNexus 自动生成，界面配置变更时会被覆盖"
+
+
 
 class ModelPathManager:
     """模型路径管理器"""
@@ -230,6 +236,27 @@ class ModelPathManager:
         
         return result
     
+    def _is_generated_by_app(self, yaml_path: Path) -> bool:
+        """
+        判断 extra_model_paths.yaml 是否由本应用生成
+
+        通过首行归属标记识别。无法读取或标记不匹配时一律视为用户文件，
+        宁可保留也不误删。
+
+        Args:
+            yaml_path: YAML 文件路径
+
+        Returns:
+            bool: 是否为本应用生成
+        """
+        try:
+            with open(yaml_path, 'r', encoding='utf-8') as f:
+                first_line = f.readline().strip()
+            return first_line == YAML_OWNERSHIP_MARKER
+        except Exception as e:
+            logger.warning(f"读取 YAML 归属标记失败，按用户文件处理: {e}")
+            return False
+
     def generate_yaml(self, env_id: str) -> dict:
         """
         生成 extra_model_paths.yaml 文件
@@ -258,6 +285,19 @@ class ModelPathManager:
         if not environment.model_path_configs:
             yaml_path = Path(environment.config.general.comfyui_path) / "extra_model_paths.yaml"
             if yaml_path.exists():
+                # 关键保护：该文件可能是用户手工维护的，绝不能因为界面里没配置就静默删除。
+                # 仅当文件首行带有本应用的生成标记时，才视为可安全清理的产物。
+                if not self._is_generated_by_app(yaml_path):
+                    logger.warning(
+                        f"当前环境未配置模型路径，检测到手工维护的 YAML，已保留不做改动: {yaml_path}"
+                    )
+                    return {
+                        "success": True,
+                        "skipped": True,
+                        "preserved": True,
+                        "message": f"没有模型路径配置，已保留现有 YAML 文件: {yaml_path}"
+                    }
+
                 try:
                     yaml_path.unlink()
                 except Exception as e:
@@ -266,10 +306,17 @@ class ModelPathManager:
                         "error_code": "FILE_DELETE_FAILED",
                         "error_message": f"删除 YAML 文件失败: {str(e)}"
                     }
-            
+
+                return {
+                    "success": True,
+                    "skipped": True,
+                    "message": "没有模型路径配置，已删除本应用生成的 YAML 文件"
+                }
+
             return {
                 "success": True,
-                "message": "没有模型路径配置，YAML 文件已删除或不存在"
+                "skipped": True,
+                "message": "没有模型路径配置，且不存在 YAML 文件，无需生成"
             }
         
         # 字段名映射：前端驼峰命名 -> ComfyUI 下划线命名
@@ -312,6 +359,8 @@ class ModelPathManager:
         yaml_path = Path(environment.config.general.comfyui_path) / "extra_model_paths.yaml"
         try:
             with open(yaml_path, 'w', encoding='utf-8') as f:
+                # 首行写入归属标记，使后续「无配置」场景可以安全区分本应用产物与用户手写文件
+                f.write(YAML_OWNERSHIP_MARKER + "\n")
                 yaml.dump(yaml_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
             
             return {
