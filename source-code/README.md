@@ -4,7 +4,7 @@
 > 架构、命令、约定与调试方法见 [`CLAUDE.md`](../CLAUDE.md)；打包发布见 [`build_scripts/打包说明.md`](build_scripts/打包说明.md)。
 > 请勿在本文件里复制产品章节（规则见 [`README更新规范.md`](README更新规范.md)）。
 >
-> Last verified: 2026-11-01（对照 commit `6e3c986`，目录清单来自 `ls -d source-code/*/` 与 `git ls-files` 实测）
+> Last verified: 2026-11-01（本次整改后按 `git ls-files` 与本地实测命令核对；目录清单与测试命令均已复核）
 
 ## 该看哪个文档
 
@@ -66,7 +66,7 @@ python main.py
 
 # 3) 测试
 pip install -r requirements-test.txt
-python -m pytest -o addopts="" -q tests          # 全量（离线、无网络依赖）
+python -m pytest -o addopts="" -q tests --ignore=tests/test_model_list_debug_log.py   # 全量（离线；被忽略的文件会请求外网，需单独运行）
 python -m pytest -o addopts="" -q tests/unit     # 仅单元测试
 ```
 
