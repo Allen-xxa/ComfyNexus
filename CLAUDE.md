@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Last verified**: 2026-11-01（对照 commit `14d1b9e`；「开发注意事项 8. 密钥与敏感数据」按 Phase 1.1 密钥整改后的实际代码与命令输出核对）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
+> **Last verified**: 2026-11-01（对照 commit `14d1b9e`；「开发注意事项 8/9」按 Phase 1.1 密钥整改、Phase 1.2 HTTP 服务加固后的实际代码与命令输出核对）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
 > 结构/版本类信息以本文件为唯一来源；产品功能介绍以根目录 `README.md` 为唯一来源，`source-code/README.md` 只做源码目录导航。
 
 ## 项目概述
@@ -260,6 +260,19 @@ process_manager.start(python_path, comfyui_path, args=None, env_config=None)  # 
 - **日志**：打印 provider 配置前必须过 `security_utils.mask_api_key()`（`ai_service.py`、`ai_controller.py` 已按此处理）；`secret_store.mask_api_key()` 是 UI/桥接用的 `前3******后4`，两者用途不同、不要混用。
 - **导出/导入**：`export_configs` 导出的是本机密钥密文，**换机后无法解密**。`import_configs` 会先解密再用本机密钥重新加密；解不开的配置仍然导入（其余字段保留），但密钥清空并在 `errors` 中提示用户重填。
 - **仍未覆盖**：联网搜索 Provider 的 api_key 是明文存储的 —— `SearchConfig`（`core/ai/search/search_config.py:51`）写到 `get_config_dir()/search_config.json`（开发环境实测 `source-code/backend/config/search_config.json`，已被 `source-code/.gitignore:271` 忽略，不入库），且生效的 `ai_get_search_config`（`ai_controller.py:2452`；同名方法在 `:1066` 另有一份定义，被前者遮蔽）把该配置原样回传前端。LoRA 模型的 CivitAI key 接口同样未审计。这两处不属于本次整改范围，改动需另行立项。
+
+### 9. 本机 HTTP 服务的安全边界（`utils/http_server.py`）
+
+**原则：只监听回环、只服务白名单来源、URL 片段拼路径必须先收敛。**
+
+- **绑定**：`find_available_port()`、`_run_server()`、`get_url()` 统一使用模块常量 `LOOPBACK_HOST = "127.0.0.1"`，不监听对外网卡；改端口逻辑时不要引入 `0.0.0.0`。
+- **CORS**：`ALLOWED_CORS_ORIGINS` 只放行 `http://127.0.0.1[:port]` 与 `http://localhost[:port]` 的 `Origin`；其它来源拿不到 `Access-Control-Allow-Origin`（整改前是 `CORS(app)`，等于向任意网页开放本机文件读取）。
+- **静态路径收敛**：所有用 URL 片段拼文件路径的路由（`/<path:path>`、`/images/<filename>`、`/prompt/images/<filename>`、`/lora/preview/<model_id>/<filename>`）都必须先过 `_resolve_within(base_dir, relative)`：
+  - 拒绝 NUL、反斜杠、前导 `/`、盘符前缀（`C:` 等）、`.`/`..` 段、空段，以及 `resolve()` 后落在 `base_dir` 之外的结果（含软链接逃逸）。
+  - **注意 `Path(base) / "C:/Windows/win.ini"` 会直接变成那个绝对路径**——这是整改前可复现的任意文件读；新增路由时不要直接 `base / url_fragment`。
+  - 越界与不存在统一返回 `NOT_FOUND_BODY`（`"Not Found"`）404，不回显入参；500 一律返回 `INTERNAL_ERROR_BODY`，异常详情只进日志。
+  - 未知但合法的前端路由仍回退 `index.html`（SPA 路由需要），只有越界请求才禁止回退。
+- **仍按原样返回的**：`/gallery/thumbnail|asset/<asset_id>` 走数据库查 `asset_id`，不拼接 URL 片段；但其 `file_path` 来自库内的绝对路径，若怀疑数据库被篡改需另行评估。
 
 ## 测试策略
 
