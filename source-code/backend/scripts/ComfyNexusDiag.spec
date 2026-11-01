@@ -1,8 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+# 入口脚本与本 spec 同目录，避免硬编码某台开发机的绝对路径
+ENTRY_SCRIPT = str(Path(SPECPATH) / 'diagnose_system.py')
 
 a = Analysis(
-    ['g:\\AI-Code-test\\ComfyNexus\\backend\\scripts\\diagnose_system.py'],
+    [ENTRY_SCRIPT],
     pathex=[],
     binaries=[],
     datas=[],
