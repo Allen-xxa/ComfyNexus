@@ -17,6 +17,7 @@ from .message_repository import MessageRepository
 from .models import Message
 from .providers.factory import ProviderFactory
 from .providers.base_provider import StreamChunk
+from .security_utils import mask_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,11 @@ class AIService:
                 f"[AI Service] 创建 Provider: provider_name={provider_name}, "
                 f"model={model}"
             )
-            logger.debug(f"[AI Service] Provider 配置: {provider_config}")
+            safe_config = {
+                **provider_config,
+                "api_key": mask_api_key(provider_config.get("api_key", "")),
+            }
+            logger.debug(f"[AI Service] Provider 配置: {safe_config}")
             
             # 从 config 中提取 use_proxy 参数（如果存在）
             use_proxy = config.get("use_system_proxy", False)

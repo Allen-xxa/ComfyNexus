@@ -22,6 +22,7 @@ from backend.src.core.ai.models import APIConfigEntity
 from backend.src.core.ai.model_list_cache import ModelListCache
 from backend.src.core.ai.providers.factory import ProviderFactory
 from backend.src.core.ai.security_utils import mask_api_key
+from backend.src.core.ai import secret_store
 
 
 logger = logging.getLogger(__name__)
@@ -289,7 +290,11 @@ class AIController:
             if config.extra:
                 provider_config.update(config.extra)
 
-            logger.debug(f"Provider 配置: {provider_config}")
+            safe_config = {
+                **provider_config,
+                "api_key": mask_api_key(provider_config.get("api_key", "")),
+            }
+            logger.debug(f"Provider 配置: {safe_config}")
             logger.info(f"[AI Controller] 使用系统代理: {config.use_system_proxy}")
 
             # 定义异步函数来处理流式响应
@@ -860,9 +865,10 @@ class AIController:
             provider: 服务商名称（openai/xflow/iflow/custom-openai）
             config: 服务商配置
                 {
-                    "api_key": str,
-                    "base_url": str,  # 可选
-                    "model": str,     # 当前选择的模型（用于测试）
+                    "api_key": str,       # 新建/未保存时传明文；已保存配置可省略
+                    "config_id": str,     # 可选：已保存配置的 ID，掩码/空密钥时由后端补齐真实密钥
+                    "base_url": str,      # 可选
+                    "model": str,         # 当前选择的模型（用于测试）
                     "temperature": float,
                     "max_tokens": int
                 }
@@ -887,6 +893,9 @@ class AIController:
             # }
         """
         try:
+            # 掩码合同：已保存配置的真实密钥由后端补齐，前端不再经手明文
+            config = self._hydrate_api_key_from_store(config)
+
             # 获取 base_url（如果未提供，使用默认值）
             base_url = config.get("base_url", "https://api.openai.com/v1")
             
@@ -992,8 +1001,9 @@ class AIController:
         
         Args:
             provider: 服务商名称
-            config: 服务商配置
-            
+            config: 服务商配置。对已保存的配置，`api_key` 可以是掩码或留空，
+                    同时传入 `config_id` 后真实密钥由后端从数据库补齐。
+
         Returns:
             {
                 "success": bool,
@@ -1003,6 +1013,9 @@ class AIController:
             }
         """
         try:
+            # 掩码合同：已保存配置的真实密钥由后端补齐
+            config = self._hydrate_api_key_from_store(config)
+
             logger.info(f"测试 {provider} 连接")
             logger.debug(f"[ai_test_connection] 收到的配置参数: {list(config.keys())}")
             
@@ -1157,7 +1170,41 @@ class AIController:
             }
     
     # ==================== 多配置管理 API ====================
-    
+
+    def _hydrate_api_key_from_store(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        当前端只持有掩码时，按 `config_id` 从数据库补齐真实 API Key。
+
+        背景：`ai_list_configs` / `ai_get_config_detail` 不再回传明文密钥，
+        "测试连接""获取模型列表"这类需要真实密钥的操作如果针对**已保存的配置**发起，
+        必须由后端自己取出密钥，前端不再经手明文。
+
+        Args:
+            config: 请求携带的配置（可能含 config_id / api_key / base_url 等）
+
+        Returns:
+            Dict: 补齐后的配置副本；未提供 config_id 或已带真实密钥时原样返回
+        """
+        config_id = config.get("config_id")
+        if not config_id:
+            return config
+
+        incoming = config.get("api_key", "") or ""
+        has_real_key = bool(incoming) and not secret_store.is_masked_value(incoming, "")
+        if has_real_key:
+            return config
+
+        stored = self.config_manager.get_config_by_id(config_id)
+        if stored is None:
+            logger.warning(f"补齐 API Key 失败：配置不存在 {config_id}")
+            return config
+
+        hydrated = dict(config)
+        hydrated["api_key"] = stored.api_key
+        if not hydrated.get("base_url"):
+            hydrated["base_url"] = stored.base_url
+        return hydrated
+
     def ai_list_configs(self) -> Dict[str, Any]:
         """
         获取所有 API 配置列表
@@ -1176,18 +1223,24 @@ class AIController:
                         "last_tested_at": str,
                         "usage_count": int,
                         "created_at": str,
-                        "updated_at": str
+                        "updated_at": str,
+                        "api_key_masked": str,  # 掩码，形如 sk-******XjX9
+                        "has_api_key": bool     # 是否已保存密钥
                     }
                 ],
                 "error_message": str  # 仅在失败时
             }
+        
+        Note:
+            **不回传明文 api_key**（含掩码字段代替）。需要以已保存配置的身份测试连接/拉取模型时，
+            在 config 里带 `config_id`，由后端补齐密钥。
         """
         try:
             logger.info("获取 API 配置列表")
             configs = self.config_manager.list_configs()
             return {
                 "success": True,
-                "configs": [config.to_dict() for config in configs]
+                "configs": [config.to_masked_dict() for config in configs]
             }
         except Exception as e:
             logger.error(f"获取配置列表失败: {e}", exc_info=True)
@@ -1210,7 +1263,6 @@ class AIController:
                     "id": str,
                     "alias": str,
                     "provider": str,
-                    "api_key": str,
                     "base_url": str,
                     "model": str,
                     "models": List[str],
@@ -1220,10 +1272,16 @@ class AIController:
                     "last_tested_at": str,
                     "usage_count": int,
                     "created_at": str,
-                    "updated_at": str
+                    "updated_at": str,
+                    "api_key_masked": str,  # 掩码（替代明文 api_key）
+                    "has_api_key": bool
                 },
                 "error_message": str  # 仅在失败时
             }
+        
+        Note:
+            不再返回明文 `api_key`。编辑时前端把该字段留空即表示"保持原密钥不变"；
+            `ai_update_config` 也会忽略掩码值。
         """
         try:
             logger.info(f"获取配置详情: {config_id}")
@@ -1235,7 +1293,7 @@ class AIController:
                 }
             return {
                 "success": True,
-                "config": config.to_dict()
+                "config": config.to_masked_dict()
             }
         except Exception as e:
             logger.error(f"获取配置详情失败: {e}", exc_info=True)
@@ -1343,7 +1401,15 @@ class AIController:
             if "provider" in config:
                 existing_config.provider = config["provider"]
             if "api_key" in config:
-                existing_config.api_key = config["api_key"]
+                # 空值或掩码值 = 用户没有改动密钥，保留数据库里已保存的密钥。
+                # 详情接口现在只回掩码，若不这样判断，掩码会被当成新密钥写库、原密钥丢失。
+                incoming_key = config["api_key"] or ""
+                if secret_store.is_masked_value(incoming_key, existing_config.api_key):
+                    logger.info(f"更新配置 {config_id}：收到掩码值，保持原 API Key 不变")
+                elif not incoming_key.strip():
+                    logger.info(f"更新配置 {config_id}：API Key 留空，保持原 API Key 不变")
+                else:
+                    existing_config.api_key = incoming_key.strip()
             if "base_url" in config:
                 existing_config.base_url = config["base_url"]
             if "model" in config:

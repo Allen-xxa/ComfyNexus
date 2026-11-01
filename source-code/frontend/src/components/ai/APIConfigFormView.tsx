@@ -142,6 +142,9 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
   const [alias, setAlias] = useState('')
   const [provider, setProvider] = useState(configId ? '' : 'xflow')
   const [apiKey, setApiKey] = useState('')
+  // 编辑模式下后端只回传掩码：记录"库里是否已有密钥 + 掩码"，用于占位提示和"留空即不变"校验
+  const [hasSavedApiKey, setHasSavedApiKey] = useState(false)
+  const [savedApiKeyMask, setSavedApiKeyMask] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [model, setModel] = useState('')
   const [extraFields, setExtraFields] = useState<Record<string, string>>({})
@@ -166,6 +169,18 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
   
   // 获取当前服务商的常用模型列表
   const [availableModels, setAvailableModels] = useState<string[]>([])
+  
+  /**
+   * API Key 是否视为"未填写"
+   *
+   * 编辑模式下库里已存密钥时，输入框留空表示"保持原密钥不变"（后端也只在该字段
+   * 非空时才覆盖），因此不能按"未填写"处理。
+   */
+  const isApiKeyMissing = (): boolean => {
+    if (!selectedProviderInfo?.requiresApiKey) return false
+    if (apiKey.trim()) return false
+    return !(isEditMode && hasSavedApiKey)
+  }
   
   /**
    * 加载配置数据（编辑模式）
@@ -194,7 +209,10 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
       console.log('[APIConfigFormView] useSystemProxy 值:', config.useSystemProxy)
       setAlias(config.alias)
       setProvider(config.provider)
-      setApiKey(config.apiKey)
+      // 不再把密钥（哪怕是掩码）填进输入框：留空 = 保持后端已保存的密钥不变
+      setApiKey('')
+      setHasSavedApiKey(config.hasApiKey)
+      setSavedApiKeyMask(config.apiKey || '')
       setBaseUrl(config.baseUrl || '')
       setModel(config.model)
       setExtraFields(config.extra || {})
@@ -211,6 +229,8 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
     setAlias('')
     setProvider('xflow')
     setApiKey('')
+    setHasSavedApiKey(false)
+    setSavedApiKeyMask('')
     setBaseUrl('')
     setModel('')
     setExtraFields({})
@@ -240,8 +260,8 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
       newErrors.provider = t('ai.configForm.errors.providerRequired')
     }
 
-    // 验证 API Key（Ollama 除外）
-    if (selectedProviderInfo?.requiresApiKey && (!apiKey || apiKey.trim() === '')) {
+    // 验证 API Key（Ollama 除外；编辑模式留空表示沿用已保存的密钥）
+    if (isApiKeyMissing()) {
       newErrors.apiKey = t('ai.configForm.errors.apiKeyRequired')
     }
 
@@ -329,8 +349,8 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
       return
     }
     
-    // 验证是否填写了 API Key（Ollama 除外）
-    if (selectedProviderInfo?.requiresApiKey && (!apiKey || apiKey.trim() === '')) {
+    // 验证是否填写了 API Key（Ollama 与"沿用已保存密钥"的编辑模式除外）
+    if (isApiKeyMissing()) {
       console.log('[APIConfigFormView] 未填写 API Key，无法刷新模型列表')
       setFetchModelsError('请先填写 API Key')
       return
@@ -340,9 +360,10 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
     setFetchModelsError(null)
     
     try {
-      // 调用 Store 方法获取模型列表
+      // 调用 Store 方法获取模型列表（编辑模式带 configId，密钥由后端补齐）
       const models = await getAvailableModels(provider, {
         apiKey: apiKey.trim(),
+        configId,
         baseUrl: baseUrl.trim() || undefined,
         useSystemProxy: useSystemProxy  // 传递代理设置
       })
@@ -395,7 +416,10 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
       useSystemProxy  // 新增：包含代理设置
     }
     
-    console.log('[APIConfigFormView] 配置数据:', configData)
+    console.log('[APIConfigFormView] 配置数据:', {
+      ...configData,
+      apiKey: configData.apiKey ? '表单输入' : '留空（沿用已保存）',  // 脱敏
+    })
     console.log('[APIConfigFormView] configData.useSystemProxy:', configData.useSystemProxy)
     
     try {
@@ -555,6 +579,7 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
     
     // 构建配置数据
     const configData: APIConfigInput = {
+      id: configId,  // 编辑模式：密钥留空时由后端用该 ID 从库里补齐
       alias: alias.trim(),
       provider,
       apiKey: apiKey.trim(),
@@ -567,7 +592,7 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
     
     console.log('[APIConfigFormView] 配置数据:', {
       ...configData,
-      apiKey: '***',  // 脱敏
+      apiKey: configData.apiKey ? '表单输入' : '留空（沿用已保存）',  // 脱敏
       useSystemProxy: configData.useSystemProxy
     })
     
@@ -738,7 +763,11 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
               <Input
                 id="apiKey"
                 type="password"
-                placeholder={t("common.placeholder.apiKey")}
+                placeholder={
+                  isEditMode && hasSavedApiKey
+                    ? `已保存 ${savedApiKeyMask}，留空表示不修改`
+                    : t("common.placeholder.apiKey")
+                }
                 value={apiKey}
                 onChange={(e) => {
                   setApiKey(e.target.value)
@@ -750,7 +779,9 @@ export const APIConfigFormView: React.FC<APIConfigFormViewProps> = ({
                 <p className="text-sm text-destructive">{errors.apiKey}</p>
               )}
               <p className="text-xs text-muted-foreground">
-                API Key 将被加密存储
+                {isEditMode && hasSavedApiKey
+                  ? 'API Key 加密保存在本机，界面不再显示原文；留空即沿用已保存的密钥'
+                  : 'API Key 将被加密保存在本机，保存后界面不再显示原文'}
               </p>
             </div>
           )}

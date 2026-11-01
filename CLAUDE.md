@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Last verified**: 2026-11-01（对照 commit `14d1b9e`）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
+> **Last verified**: 2026-11-01（对照 commit `14d1b9e`；「开发注意事项 8. 密钥与敏感数据」按 Phase 1.1 密钥整改后的实际代码与命令输出核对）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
 > 结构/版本类信息以本文件为唯一来源；产品功能介绍以根目录 `README.md` 为唯一来源，`source-code/README.md` 只做源码目录导航。
 
 ## 项目概述
@@ -179,6 +179,7 @@ File/Git/Process（系统层）
 - **providers/**: 各模型的适配器（BaseProvider 继承）
 - **search/**: 联网搜索（`search_manager.py`: DuckDuckGo 始终可用，Google 需 api_key + search_engine_id，Tavily 需 api_key）
 - **DocumentProcessor**: 文档/图片分析（`document_processor.py`）
+- **SecretStore**: 服务商 API Key 的加解密入口（`secret_store.py`）。每个安装实例在启动时生成/读取自己的 Fernet 密钥（`data/secrets/ai_fernet.key`），**没有内置公共密钥**；详见「开发注意事项 8. 密钥与敏感数据」
 
 ### 缓存系统 (`core/cache/`)
 `CacheService`（`cache_service.py:33`）是**缓存统计与清理**服务，公开方法只有 `get_cache_stats / get_all_cache_stats / clear_cache / clear_all_caches / get_cache_types`，**没有 `get()` 读取接口**。
@@ -243,6 +244,22 @@ process_manager.start(python_path, comfyui_path, args=None, env_config=None)  # 
 - 如果历史提交中已跟踪构建产物，用 `git rm -r --cached <路径>` 移出版本控制（保留本地文件），然后提交；不要用不带 `--cached` 的 `git rm`。
 - **不要用 `git ls-files -ci --exclude-standard` 批量清理**：仓库中有刻意强制跟踪的依赖与配置（如 `backend/lib/webview2_netcore/*.dll`），批量操作会误删。只清理上列构建产物路径。
 - 防回归：提交前可用 `git ls-files -- 'source-code/dist/**' 'source-code/build/**' 'source-code/frontend/coverage/**' 'source-code/frontend/tsconfig.tsbuildinfo'` 检查，输出必须为空。
+
+### 8. 密钥与敏感数据（AI 服务商 API Key）
+
+**原则：密钥只在本机可解密，桥接层只传掩码，日志不落明文。**
+
+- **本机密钥**：`SecretStore`（`backend/src/core/ai/secret_store.py`）在首次使用时生成 `data/secrets/ai_fernet.key`（路径由 `get_data_dir("secrets")` 解析，随安装位置变化），写入用 `mkstemp` + `fsync` + `os.replace` 原子替换，并尽力收紧权限（Windows `icacls /inheritance:r /grant:r "<user>:F"`、POSIX `0o600`）。
+  - 该文件**绝不入库**：`source-code/.gitignore` 中已显式忽略 `data/secrets/`。
+  - 代码里不再有硬编码 Fernet key。`secret_store.LEGACY_KEY` 只服务于历史数据迁移（读旧密文），不再用于新写入。
+- **存储**：`api_configs.api_key` 列存 `encrypted:<token>`（前缀常量 `secret_store.ENCRYPTED_PREFIX`）。`ConfigManager._migrate_api_keys()` 在首次初始化时一次性把旧密钥的密文/明文改写为本机密钥密文；改写前先备份 `ai_assistant.db.bak_prekey_<时间戳>`，解不开的行列原样保留并在返回值 `failed` 中计数。该迁移幂等（重复执行不产生第二次备份、不改动已迁移行）。
+  - 读取侧走 `ConfigManager._decrypt_api_key_for_read()`：某行密钥解不开（本机密钥文件被删/被换）时只把该行当作"未配置密钥"（`api_key=""`、`has_api_key=False`），不让 `list_configs()` 整体返回空列表。
+- **桥接契约**：`ai_list_configs` / `ai_get_config_detail` 只返回 `APIConfigEntity.to_masked_dict()`（`api_key_masked` + `has_api_key`，**不含 `api_key`**）。需要真实密钥的操作（`ai_test_connection`、`ai_get_available_models`）由 `AIController._hydrate_api_key_from_store()` 按 `config_id` 在服务端补齐，前端不回传明文。
+  - 新增返回配置对象的桥接方法时，用 `to_masked_dict()`，不要用 `to_dict()`（后者含明文 `api_key`，仅限服务端内部使用）。
+  - 前端在编辑态保留空输入框（不回显掩码），提交时若 `api_key` 为空或形似掩码，后端沿用已保存的密钥。
+- **日志**：打印 provider 配置前必须过 `security_utils.mask_api_key()`（`ai_service.py`、`ai_controller.py` 已按此处理）；`secret_store.mask_api_key()` 是 UI/桥接用的 `前3******后4`，两者用途不同、不要混用。
+- **导出/导入**：`export_configs` 导出的是本机密钥密文，**换机后无法解密**。`import_configs` 会先解密再用本机密钥重新加密；解不开的配置仍然导入（其余字段保留），但密钥清空并在 `errors` 中提示用户重填。
+- **仍未覆盖**：联网搜索 Provider 的 api_key 是明文存储的 —— `SearchConfig`（`core/ai/search/search_config.py:51`）写到 `get_config_dir()/search_config.json`（开发环境实测 `source-code/backend/config/search_config.json`，已被 `source-code/.gitignore:271` 忽略，不入库），且生效的 `ai_get_search_config`（`ai_controller.py:2452`；同名方法在 `:1066` 另有一份定义，被前者遮蔽）把该配置原样回传前端。LoRA 模型的 CivitAI key 接口同样未审计。这两处不属于本次整改范围，改动需另行立项。
 
 ## 测试策略
 

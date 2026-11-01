@@ -19,7 +19,13 @@ export interface APIConfig {
   id: string
   alias: string
   provider: string
+  /**
+   * 后端下发的 **掩码**（形如 `sk-******XjX9`），明文 API Key 不再进入前端。
+   * 仅用于展示与"是否已配置"判断，不要当作可用密钥回传。
+   */
   apiKey: string
+  /** 数据库里是否保存了 API Key */
+  hasApiKey: boolean
   baseUrl?: string
   model: string
   models: string[]
@@ -41,7 +47,8 @@ interface APIConfigResponse {
   id: string
   alias: string
   provider: string
-  api_key: string
+  api_key_masked?: string
+  has_api_key?: boolean
   base_url?: string
   model: string
   models: string[]
@@ -60,8 +67,15 @@ interface APIConfigResponse {
  * 配置输入接口（创建/更新时使用）
  */
 export interface APIConfigInput {
+  /**
+   * 已保存配置的 ID。
+   * 对已存在配置做"测试连接/拉取模型"时带上它，后端会用库里的真实密钥执行，
+   * 前端不再持有明文。
+   */
+  id?: string
   alias: string
   provider: string
+  /** 用户新输入的明文密钥；留空表示"保持后端已保存的密钥不变" */
   apiKey: string
   baseUrl?: string
   model: string
@@ -102,7 +116,7 @@ interface APIConfigStore {
   setDefaultConfig: (id: string) => Promise<boolean>
   testConfig: (id: string) => Promise<TestResult>
   testConnection: (provider: string, config: APIConfigInput) => Promise<TestResult>
-  getAvailableModels: (provider: string, config: { apiKey: string; baseUrl?: string; useSystemProxy?: boolean }) => Promise<string[]>
+  getAvailableModels: (provider: string, config: { apiKey?: string; configId?: string; baseUrl?: string; useSystemProxy?: boolean }) => Promise<string[]>
   
   // 搜索和筛选方法
   searchConfigs: (query: string) => APIConfig[]
@@ -130,7 +144,8 @@ const getMockConfigs = (): APIConfig[] => {
       id: 'mock-config-1',
       alias: '工作账号',
       provider: 'openai',
-      apiKey: 'sk-mock-key-1',
+      apiKey: 'sk-******ckey1',
+      hasApiKey: true,
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-4',
       models: ['gpt-4', 'gpt-3.5-turbo'],
@@ -148,7 +163,8 @@ const getMockConfigs = (): APIConfig[] => {
       id: 'mock-config-2',
       alias: '个人账号',
       provider: 'openai',
-      apiKey: 'sk-mock-key-2',
+      apiKey: 'sk-******ckey2',
+      hasApiKey: true,
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-3.5-turbo',
       models: ['gpt-4', 'gpt-3.5-turbo'],
@@ -239,7 +255,8 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
         id: backendConfig.id,
         alias: backendConfig.alias,
         provider: backendConfig.provider,
-        apiKey: backendConfig.api_key || '',
+        apiKey: backendConfig.api_key_masked || '',
+        hasApiKey: backendConfig.has_api_key ?? false,
         baseUrl: backendConfig.base_url,
         model: backendConfig.model,
         models: backendConfig.models || [],
@@ -332,7 +349,8 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
         id: backendConfig.id,
         alias: backendConfig.alias,
         provider: backendConfig.provider,
-        apiKey: backendConfig.api_key,
+        apiKey: backendConfig.api_key_masked || '',
+        hasApiKey: backendConfig.has_api_key ?? false,
         baseUrl: backendConfig.base_url,
         model: backendConfig.model,
         models: backendConfig.models || [],
@@ -393,6 +411,7 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
           alias: config.alias,
           provider: config.provider,
           apiKey: config.apiKey,
+          hasApiKey: !!config.apiKey,
           baseUrl: config.baseUrl,
           model: config.model,
           models: config.models || [],
@@ -417,7 +436,7 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
       
       // 生产环境：调用后端 API
       console.log('[useAPIConfigStore] 调用后端 API: ai_create_config')
-      console.log('[useAPIConfigStore] 配置数据:', config)
+      console.log('[useAPIConfigStore] 配置数据:', { ...config, apiKey: config.apiKey ? '***' : 'empty' })
       console.log('[useAPIConfigStore] useSystemProxy 值:', config.useSystemProxy)
       
       // 转换字段名（前端驼峰转后端下划线）
@@ -432,7 +451,7 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
         use_system_proxy: config.useSystemProxy || false  // 添加代理字段
       }
       
-      console.log('[useAPIConfigStore] 请求数据:', requestData)
+      console.log('[useAPIConfigStore] 请求数据:', { ...requestData, api_key: requestData.api_key ? '***' : 'empty' })
       
       const response = await window.pywebview.api.ai_create_config(requestData)
       
@@ -499,7 +518,9 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
           ...state.configs[configIndex],
           alias: config.alias,
           provider: config.provider,
-          apiKey: config.apiKey,
+          // 留空表示沿用已保存的掩码（与后端"空值/掩码 = 不修改密钥"的语义一致）
+          apiKey: config.apiKey || state.configs[configIndex].apiKey,
+          hasApiKey: !!config.apiKey || state.configs[configIndex].hasApiKey,
           baseUrl: config.baseUrl,
           model: config.model,
           models: config.models || state.configs[configIndex].models,
@@ -522,14 +543,13 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
       
       // 生产环境：调用后端 API
       console.log('[useAPIConfigStore] 调用后端 API: ai_update_config')
-      console.log('[useAPIConfigStore] 配置数据:', config)
+      console.log('[useAPIConfigStore] 配置数据:', { ...config, apiKey: config.apiKey ? '***' : 'empty' })
       console.log('[useAPIConfigStore] useSystemProxy 值:', config.useSystemProxy)
       
       // 转换字段名
-      const requestData = {
+      const requestData: Record<string, unknown> = {
         alias: config.alias,
         provider: config.provider,
-        api_key: config.apiKey,
         base_url: config.baseUrl,
         model: config.model,
         models: config.models,
@@ -537,7 +557,12 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
         use_system_proxy: config.useSystemProxy || false  // 添加代理字段
       }
       
-      console.log('[useAPIConfigStore] 请求数据:', requestData)
+      // API Key 留空 = 不修改：干脆不下发该字段，后端保持库里的原密钥
+      if (config.apiKey && config.apiKey.trim()) {
+        requestData.api_key = config.apiKey.trim()
+      }
+      
+      console.log('[useAPIConfigStore] 请求数据:', { ...requestData, api_key: requestData.api_key ? '***' : 'unchanged' })
       
       const response = await window.pywebview.api.ai_update_config(id, requestData)
       
@@ -886,8 +911,14 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
       console.log('[useAPIConfigStore] config.useSystemProxy 值:', config.useSystemProxy)
       
       // 构建请求参数（使用 snake_case，与后端期望的格式一致）
-      const requestConfig: Record<string, any> = {
-        api_key: config.apiKey
+      const requestConfig: Record<string, any> = {}
+      
+      // 用户新输了密钥就带明文；留空则只带 config_id，由后端用库里的密钥测试
+      if (config.apiKey && config.apiKey.trim()) {
+        requestConfig.api_key = config.apiKey.trim()
+      }
+      if (config.id) {
+        requestConfig.config_id = config.id
       }
       
       if (config.baseUrl) {
@@ -913,7 +944,7 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
       
       console.log('[useAPIConfigStore] 最终请求配置:', {
         ...requestConfig,
-        api_key: '***'  // 脱敏
+        api_key: requestConfig.api_key ? '表单输入' : `沿用已保存(config_id=${config.id || '无'})`
       })
       
       const response = await window.pywebview.api.ai_test_connection(provider, requestConfig)
@@ -967,7 +998,8 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
    * 验证需求：5.1, 5.2
    * 
    * @param provider 服务商名称
-   * @param config 配置信息（包含 apiKey 和 baseUrl）
+   * @param config 配置信息（apiKey 为表单明文或掩码；已保存配置传 configId，
+   *               掩码/空值时由后端用库里的真实密钥拉取）
    * @returns Promise<string[]> 模型列表
    */
   getAvailableModels: async (provider, config) => {
@@ -991,7 +1023,9 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
       
       // 构建请求参数（使用 snake_case，与后端 Provider 期望的格式一致）
       const requestConfig = {
-        api_key: config.apiKey,
+        // 掩码/空值时后端按 config_id 用库里的真实密钥执行，前端不再持有明文
+        api_key: config.apiKey || '',
+        config_id: config.configId || undefined,
         base_url: config.baseUrl || undefined,  // 如果为空字符串，传 undefined
         model: 'gpt-3.5-turbo',  // 提供一个默认模型（某些 Provider 可能需要）
         temperature: 0.7,
@@ -1002,6 +1036,7 @@ export const useAPIConfigStore = create<APIConfigStore>((set, get) => ({
       console.log('[useAPIConfigStore] 请求参数:', {
         provider,
         api_key: config.apiKey ? '***' : 'empty',
+        config_id: config.configId || 'none',
         base_url: config.baseUrl || 'default'
       })
       

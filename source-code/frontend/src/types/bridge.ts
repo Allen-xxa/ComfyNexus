@@ -438,6 +438,7 @@ export interface PyWebViewAPI {
   }>;
   
   // 多配置管理 API
+  // 注意：后端只下发掩码（api_key_masked）与 has_api_key，不再回传明文 api_key
   ai_list_configs: () => Promise<{
     success: boolean
     configs?: Array<{
@@ -445,6 +446,8 @@ export interface PyWebViewAPI {
       alias: string
       provider: string
       model: string
+      api_key_masked?: string
+      has_api_key?: boolean
       is_default: boolean
       status: string
       last_tested_at?: string
@@ -461,7 +464,8 @@ export interface PyWebViewAPI {
       id: string
       alias: string
       provider: string
-      api_key: string
+      api_key_masked?: string
+      has_api_key?: boolean
       base_url?: string
       model: string
       models: string[]
@@ -506,6 +510,7 @@ export interface PyWebViewAPI {
     error_message?: string
   }>;
   
+  // config 可含 config_id：留空或传掩码时由后端用已保存的密钥补齐
   ai_test_connection: (provider: string, config: any) => Promise<{
     success: boolean
     message?: string

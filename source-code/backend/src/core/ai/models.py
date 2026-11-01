@@ -474,12 +474,36 @@ class APIConfigEntity:
     
     def to_dict(self) -> Dict[str, Any]:
         """
-        转换为字典
+        转换为字典（**包含明文 api_key**）
         
         Returns:
             Dict[str, Any]: 配置数据字典
+        
+        Warning:
+            仅限后端内部使用（如导出配置、构造 Provider）。
+            任何回给前端的 bridge 接口都必须改用 `to_masked_dict()`，
+            否则明文密钥会经由 pywebview 序列化进入渲染进程。
         """
         return asdict(self)
+
+    def to_masked_dict(self) -> Dict[str, Any]:
+        """
+        转换为**可安全回传前端**的字典。
+
+        移除 `api_key` 字段，改为：
+            - `api_key_masked`: 掩码（形如 `sk-******XjX9`），空密钥为 ""
+            - `has_api_key`: 是否已保存密钥
+
+        Returns:
+            Dict[str, Any]: 不含明文密钥的配置字典
+        """
+        from backend.src.core.ai.secret_store import mask_api_key
+
+        data = asdict(self)
+        api_key = data.pop("api_key", "") or ""
+        data["api_key_masked"] = mask_api_key(api_key)
+        data["has_api_key"] = bool(api_key)
+        return data
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "APIConfigEntity":
@@ -494,9 +518,13 @@ class APIConfigEntity:
         """
         return cls(**data)
     
-    def validate(self) -> bool:
+    def validate(self, require_api_key: bool = True) -> bool:
         """
         验证配置数据的有效性
+        
+        Args:
+            require_api_key: 是否强制要求 API Key。仅"导入其它设备的配置"这类
+                密钥确实无法带过来的场景会传 False，用户需要补填密钥后才能使用。
         
         Returns:
             bool: 数据是否有效
@@ -513,7 +541,7 @@ class APIConfigEntity:
         if not self.provider:
             raise ValueError("服务商不能为空")
         # Ollama 不需要 API Key
-        if self.provider != "ollama" and not self.api_key:
+        if require_api_key and self.provider != "ollama" and not self.api_key:
             raise ValueError("API Key 不能为空")
         if not self.model:
             raise ValueError("模型不能为空")

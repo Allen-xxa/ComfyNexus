@@ -28,6 +28,8 @@ const mockPywebviewAPI = {
   ai_delete_config: vi.fn(),
   ai_set_default_config: vi.fn(),
   ai_test_config: vi.fn(),
+  ai_test_connection: vi.fn(),
+  ai_get_available_models: vi.fn(),
 }
 
 // 设置全局 window.pywebview
@@ -84,7 +86,8 @@ describe('useAPIConfigStore - loadConfigs', () => {
         id: 'config-1',
         alias: '工作账号',
         provider: 'openai',
-        api_key: 'sk-test-1',
+        api_key_masked: 'sk-t******t-1',
+        has_api_key: true,
         base_url: 'https://api.openai.com/v1',
         model: 'gpt-4',
         models: ['gpt-4', 'gpt-3.5-turbo'],
@@ -101,7 +104,8 @@ describe('useAPIConfigStore - loadConfigs', () => {
         id: 'config-2',
         alias: '个人账号',
         provider: 'openai',
-        api_key: 'sk-test-2',
+        api_key_masked: '',
+        has_api_key: false,
         base_url: 'https://api.openai.com/v1',
         model: 'gpt-3.5-turbo',
         models: ['gpt-4', 'gpt-3.5-turbo'],
@@ -130,6 +134,11 @@ describe('useAPIConfigStore - loadConfigs', () => {
     expect(state.defaultConfigId).toBe('config-1')
     expect(state.isLoading).toBe(false)
     expect(state.error).toBeNull()
+    // 后端只下发掩码：前端 apiKey 字段即掩码，明文不进渲染进程
+    expect(state.configs[0].apiKey).toBe('sk-t******t-1')
+    expect(state.configs[0].hasApiKey).toBe(true)
+    expect(state.configs[1].apiKey).toBe('')
+    expect(state.configs[1].hasApiKey).toBe(false)
   })
   
   it('应该处理加载失败的情况', async () => {
@@ -167,7 +176,8 @@ describe('useAPIConfigStore - loadConfigs', () => {
         id: 'config-1',
         alias: '测试配置',
         provider: 'openai',
-        api_key: 'sk-test',
+        api_key_masked: 'sk-t******test',
+        has_api_key: true,
         base_url: 'https://api.openai.com/v1',
         model: 'gpt-4',
         models: ['gpt-4'],
@@ -194,7 +204,8 @@ describe('useAPIConfigStore - loadConfigs', () => {
     const config = state.configs[0]
     
     // 验证字段名已转换为驼峰
-    expect(config.apiKey).toBe('sk-test')
+    expect(config.apiKey).toBe('sk-t******test')
+    expect(config.hasApiKey).toBe(true)
     expect(config.baseUrl).toBe('https://api.openai.com/v1')
     expect(config.isDefault).toBe(true)
     expect(config.lastTestedAt).toBe('2024-01-01T00:00:00Z')
@@ -211,7 +222,8 @@ describe('useAPIConfigStore - getConfig', () => {
       id: 'config-1',
       alias: '工作账号',
       provider: 'openai',
-      api_key: 'sk-test-1',
+      api_key_masked: 'sk-t******t-1',
+      has_api_key: true,
       base_url: 'https://api.openai.com/v1',
       model: 'gpt-4',
       models: ['gpt-4', 'gpt-3.5-turbo'],
@@ -236,6 +248,8 @@ describe('useAPIConfigStore - getConfig', () => {
     expect(config).not.toBeNull()
     expect(config?.id).toBe('config-1')
     expect(config?.alias).toBe('工作账号')
+    expect(config?.apiKey).toBe('sk-t******t-1')
+    expect(config?.hasApiKey).toBe(true)
     
     const state = useAPIConfigStore.getState()
     expect(state.currentConfig).toEqual(config)
@@ -293,7 +307,8 @@ describe('useAPIConfigStore - createConfig', () => {
       base_url: 'https://api.openai.com/v1',
       model: 'gpt-4',
       models: ['gpt-4'],
-      extra: {}
+      extra: {},
+      use_system_proxy: false
     })
     
     // 验证创建后重新加载了配置列表
@@ -352,7 +367,8 @@ describe('useAPIConfigStore - createConfig', () => {
       base_url: 'https://api.openai.com/v1',
       model: 'gpt-4',
       models: undefined,
-      extra: undefined
+      extra: undefined,
+      use_system_proxy: false
     })
   })
 })
@@ -389,7 +405,8 @@ describe('useAPIConfigStore - updateConfig', () => {
       base_url: 'https://api.openai.com/v1',
       model: 'gpt-4',
       models: ['gpt-4'],
-      extra: {}
+      extra: {},
+      use_system_proxy: false
     })
     
     // 验证更新后重新加载了配置列表
@@ -416,6 +433,82 @@ describe('useAPIConfigStore - updateConfig', () => {
     
     const state = useAPIConfigStore.getState()
     expect(state.error).toBe('配置不存在')
+  })
+})
+
+describe('useAPIConfigStore - 密钥掩码契约', () => {
+  it('更新时 API Key 留空应不下发 api_key 字段', async () => {
+    mockPywebviewAPI.ai_update_config.mockResolvedValue({ success: true })
+    mockPywebviewAPI.ai_list_configs.mockResolvedValue({ success: true, configs: [] })
+    
+    const store = useAPIConfigStore.getState()
+    await store.updateConfig('config-1', {
+      alias: '仅改名',
+      provider: 'openai',
+      apiKey: '',
+      model: 'gpt-4'
+    })
+    
+    const payload = mockPywebviewAPI.ai_update_config.mock.calls[0][1]
+    expect(payload).not.toHaveProperty('api_key')
+  })
+  
+  it('测试已保存配置时应带 config_id 而不是密钥', async () => {
+    mockPywebviewAPI.ai_test_connection.mockResolvedValue({
+      success: true,
+      message: '连接成功',
+      latency: 12
+    })
+    
+    const store = useAPIConfigStore.getState()
+    await store.testConnection('openai', {
+      id: 'config-1',
+      alias: '工作账号',
+      provider: 'openai',
+      apiKey: '',
+      model: 'gpt-4'
+    })
+    
+    const payload = mockPywebviewAPI.ai_test_connection.mock.calls[0][1]
+    expect(payload.config_id).toBe('config-1')
+    expect(payload).not.toHaveProperty('api_key')
+  })
+  
+  it('测试连接时表单里有新密钥才下发 api_key', async () => {
+    mockPywebviewAPI.ai_test_connection.mockResolvedValue({
+      success: true,
+      message: '连接成功',
+      latency: 12
+    })
+    
+    const store = useAPIConfigStore.getState()
+    await store.testConnection('openai', {
+      alias: '新配置',
+      provider: 'openai',
+      apiKey: 'sk-typed-by-user',
+      model: 'gpt-4'
+    })
+    
+    const [, payload] = mockPywebviewAPI.ai_test_connection.mock.calls[0]
+    expect(payload.api_key).toBe('sk-typed-by-user')
+    expect(payload).not.toHaveProperty('config_id')
+  })
+  
+  it('获取模型列表应把 configId 传给后端', async () => {
+    mockPywebviewAPI.ai_get_available_models.mockResolvedValue({
+      success: true,
+      models: ['gpt-4']
+    })
+    
+    const store = useAPIConfigStore.getState()
+    const models = await store.getAvailableModels('openai', {
+      apiKey: 'sk-t******key',
+      configId: 'config-1'
+    })
+    
+    expect(models).toEqual(['gpt-4'])
+    const [, payload] = mockPywebviewAPI.ai_get_available_models.mock.calls[0]
+    expect(payload.config_id).toBe('config-1')
   })
 })
 

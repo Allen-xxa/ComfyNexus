@@ -14,6 +14,8 @@ lora_data/
 .trae/
 docs/
 data/
+# 本机 AI 服务商密钥文件（由 backend/src/core/ai/secret_store.py 生成，绝不可入库）
+data/secrets/
 build/
 develop-eggs/
 dist/
