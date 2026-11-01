@@ -4,6 +4,7 @@
 """
 
 import os
+import re
 import sys
 import subprocess
 import threading
@@ -13,6 +14,13 @@ from pathlib import Path
 from .update_checker import UpdateChecker
 from .update_downloader import UpdateDownloader
 from backend.src.utils.logger import app_logger as logger
+
+_SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def _is_valid_sha256(value) -> bool:
+    """判断是否为 64 位十六进制 SHA256 字符串"""
+    return isinstance(value, str) and bool(_SHA256_RE.match(value))
 
 
 class UpdateController:
@@ -173,6 +181,26 @@ class UpdateController:
                 "success": False,
                 "error": "下载链接不可用"
             }
+
+        # 安装包会以更新器进程身份落盘并解压，完整性校验不能是可选项。
+        # 官方通道（没配置 dev 更新源）必须带 64 位 SHA256；缺少或格式不对直接拒绝下载。
+        # 开发通道允许缺省（自建仓库的 version.json 可能还没算 hash），但一旦提供同样会校验。
+        is_dev_channel = bool(self._checker.dev_token)
+        if not _is_valid_sha256(file_hash):
+            if not is_dev_channel:
+                logger.error(
+                    f"[UpdateController] 官方通道更新信息缺少有效 file_hash，拒绝下载: {file_hash!r}"
+                )
+                return {
+                    "success": False,
+                    "zip_path": "",
+                    "error": "更新信息缺少有效的 SHA256 校验值，已拒绝下载。请稍后重试或联系发布者",
+                    "from_local": False,
+                    "resumed": False,
+                }
+            logger.warning(
+                "[UpdateController] 开发通道未提供有效 file_hash，本次跳过完整性校验"
+            )
         
         logger.info(f"[UpdateController] 开始下载更新: {download_url}")
         if file_hash:

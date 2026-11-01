@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Last verified**: 2026-11-01（对照 commit `14d1b9e`；「开发注意事项 8/9」按 Phase 1.1 密钥整改、Phase 1.2 HTTP 服务加固后的实际代码与命令输出核对）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
+> **Last verified**: 2026-11-01（「开发注意事项 8/9/10」按 Phase 1.1 密钥整改、Phase 1.2 HTTP 服务加固、Phase 1.3 更新包加固后的实际代码与命令输出核对）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
 > 结构/版本类信息以本文件为唯一来源；产品功能介绍以根目录 `README.md` 为唯一来源，`source-code/README.md` 只做源码目录导航。
 
 ## 项目概述
@@ -273,6 +273,19 @@ process_manager.start(python_path, comfyui_path, args=None, env_config=None)  # 
   - 越界与不存在统一返回 `NOT_FOUND_BODY`（`"Not Found"`）404，不回显入参；500 一律返回 `INTERNAL_ERROR_BODY`，异常详情只进日志。
   - 未知但合法的前端路由仍回退 `index.html`（SPA 路由需要），只有越界请求才禁止回退。
 - **仍按原样返回的**：`/gallery/thumbnail|asset/<asset_id>` 走数据库查 `asset_id`，不拼接 URL 片段；但其 `file_path` 来自库内的绝对路径，若怀疑数据库被篡改需另行评估。
+
+### 10. 更新包的安全边界（`backend/updater/updater.py`、`core/updater/update_controller.py`）
+
+**原则：更新包按不可信输入处理；完整性校验不通过就不下载，路径校验不通过就一个字节都不写。**
+
+- **强制 SHA256（官方通道）**：`UpdateController.download_update()` 在下载前检查 `version.json` 的 `file_hash`，必须是 64 位十六进制（`_is_valid_sha256()`）；缺失或格式错误直接返回失败且**不调用** `UpdateDownloader.download()`。配置了 dev 更新源（`UpdateChecker.dev_token`）时允许缺省，但提供了同样会传给下载器校验。
+  - 发布 `version.json` 时必须提供 `file_hash`，否则官方通道用户将无法下载更新。
+- **解压前整体校验**：`_extract_update()` 先遍历 `zf.infolist()` 完成全部校验，再进入第二遍写盘，任何一个成员非法都会在写盘前中止：
+  - 成员路径经 `_member_relative_path()`：拒绝 NUL、反斜杠、前导 `/`、盘符前缀、`.`/`..`/空段；再经 `_safe_extract_target()` 用 `resolve()` + `is_relative_to()` 收敛到目标目录内（含软链接逃逸）。
+  - 上限：`MAX_ARCHIVE_MEMBERS = 50000`、`MAX_SINGLE_FILE_BYTES = 1 GiB`、`MAX_TOTAL_EXTRACT_BYTES = 8 GiB`；声明体积和实际写入量都会检查（声明值可伪造）。
+  - 正常更新包根目录为 `ComfyNexus/`（`EXPECTED_ROOT`），剥离前缀后不得为空。
+- **不要退回旧写法**：`target_dir / member` 配合 `zf.open(member)` 在 Windows 上可被 `../../x`、`C:/Windows/x`、反斜杠成员写出目标目录。
+- 修改这两处后跑 `pytest tests/unit/core/updater/test_update_hardening.py`（该测试用桩替换 `pythonnet`/`webview`，不会初始化 .NET 运行时）。
 
 ## 测试策略
 

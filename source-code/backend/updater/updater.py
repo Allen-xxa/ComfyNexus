@@ -7,6 +7,7 @@ ComfyNexus GUI 更新器
 
 import sys
 import os
+import re
 import time
 import zipfile
 import shutil
@@ -177,6 +178,67 @@ BACKUP_EXCLUDE_PREFIXES = [
 MUTEX_NAME = "Global\\ComfyNexus_Updater_SingleInstance"
 
 EXPECTED_ROOT = "ComfyNexus"
+
+# ========== 解压安全边界 ==========
+# 更新包来自网络，必须当成不可信输入：
+# - 成员名可能是 `../../x` / `C:/Windows/x` / `a\b`，直接与 target_dir 拼接会写到应用目录外
+# - 成员声明的解压体积可能被伪造成极小（zip bomb）
+MAX_SINGLE_FILE_BYTES = 1 * 1024 * 1024 * 1024    # 单文件 1 GiB
+MAX_TOTAL_EXTRACT_BYTES = 8 * 1024 * 1024 * 1024  # 解压总量 8 GiB
+MAX_ARCHIVE_MEMBERS = 50000                       # 成员数量上限
+
+_DRIVE_PREFIX_RE = re.compile(r"^[A-Za-z]:")
+
+
+def _member_relative_path(member: str, root_folder: Optional[str]) -> Optional[str]:
+    """
+    把 zip 成员名转换成相对 target_dir 的安全相对路径。
+
+    Args:
+        member: zip 内的成员名（可能带 `ComfyNexus/` 前缀）
+        root_folder: 已识别出的包根目录名，命中则剥离
+
+    Returns:
+        Optional[str]: 以 `/` 分隔的相对路径；不安全时返回 None
+
+    不安全判定与主程序 `_resolve_within` 一致：NUL、反斜杠、前导 `/`、盘符前缀、
+    `.`/`..`/空段都拒绝（正常更新包里不会出现）。
+    """
+    if not member or "\x00" in member:
+        return None
+    if "\\" in member:
+        return None
+    if member.startswith("/") or _DRIVE_PREFIX_RE.match(member):
+        return None
+
+    relative = member
+    if root_folder and member == root_folder:
+        # 名为根目录但不是目录项的成员，剥离后会为空，直接跳过
+        return None
+    if root_folder and member.startswith(root_folder + "/"):
+        relative = member[len(root_folder) + 1:]
+    if not relative:
+        return None
+
+    segments = relative.split("/")
+    if any(segment in ("", ".", "..") for segment in segments):
+        return None
+    return relative
+
+
+def _safe_extract_target(target_dir: Path, relative: str) -> Optional[Path]:
+    """
+    把相对路径落到 target_dir 内部；解析（含软链接）后越界返回 None。
+    """
+    try:
+        base = target_dir.resolve()
+        candidate = (base / Path(*relative.split("/"))).resolve()
+    except (OSError, ValueError):
+        return None
+    if not candidate.is_relative_to(base):
+        return None
+    return candidate
+
 
 g_mutex_handle = None
 
@@ -637,32 +699,64 @@ class UpdaterAPI:
                 
                 extracted_count = 0
                 total_files = len(members)
-                
-                for member in members:
-                    if member.endswith('/'):
-                        continue
-                    
-                    if root_folder and member.startswith(root_folder + '/'):
-                        target_member = member[len(root_folder) + 1:]
-                    else:
-                        target_member = member
-                    
-                    if not target_member:
-                        continue
-                    
-                    target_path = target_dir / target_member
+
+                # ---- 第一遍：只做校验，不落盘 ----
+                # 任何一个成员越界都直接中止，避免先写出部分文件再回滚
+                infos = [info for info in zf.infolist() if not info.is_dir()]
+                if len(infos) > MAX_ARCHIVE_MEMBERS:
+                    raise Exception(
+                        f"更新包成员数异常（{len(infos)} > {MAX_ARCHIVE_MEMBERS}），已中止解压"
+                    )
+
+                planned = []
+                declared_total = 0
+                for info in infos:
+                    relative = _member_relative_path(info.filename, root_folder)
+                    if relative is None:
+                        logger.error(f"更新包含非法成员路径: {info.filename!r}")
+                        raise Exception(f"更新包包含非法路径，已中止解压: {info.filename!r}")
+
+                    target_path = _safe_extract_target(target_dir, relative)
+                    if target_path is None:
+                        logger.error(f"更新包成员解析后越界: {info.filename!r}")
+                        raise Exception(f"更新包包含越界路径，已中止解压: {info.filename!r}")
+
+                    declared_size = max(int(info.file_size or 0), 0)
+                    if declared_size > MAX_SINGLE_FILE_BYTES:
+                        raise Exception(
+                            f"更新包单文件过大（{relative}），已中止解压"
+                        )
+                    declared_total += declared_size
+                    if declared_total > MAX_TOTAL_EXTRACT_BYTES:
+                        raise Exception("更新包解压总量超过上限，已中止解压")
+
+                    planned.append((info, relative, target_path))
+
+                # ---- 第二遍：校验通过后才真正写盘 ----
+                written_total = 0
+                for info, relative, target_path in planned:
                     target_path.parent.mkdir(parents=True, exist_ok=True)
-                    
+
                     try:
-                        with zf.open(member) as src, open(target_path, 'wb') as dst:
+                        written = 0
+                        with zf.open(info) as src, open(target_path, 'wb') as dst:
                             while True:
                                 chunk = src.read(8192)
                                 if not chunk:
                                     break
+                                written += len(chunk)
+                                written_total += len(chunk)
+                                # 声明体积可以伪造，写入时再兜一次
+                                if written > MAX_SINGLE_FILE_BYTES:
+                                    raise Exception(
+                                        f"更新包单文件解压超限: {relative}"
+                                    )
+                                if written_total > MAX_TOTAL_EXTRACT_BYTES:
+                                    raise Exception("更新包解压总量超过上限，已中止解压")
                                 dst.write(chunk)
                         extracted_count += 1
-                    except PermissionError as pe:
-                        logger.warning(f"权限错误，跳过: {target_member}")
+                    except PermissionError:
+                        logger.warning(f"权限错误，跳过: {relative}")
                         continue
                     
                     if extracted_count % 50 == 0:
