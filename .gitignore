@@ -211,3 +211,6 @@ __marimo__/
 
 # WorkBuddy 助手工作区（记忆、截图等本地数据）
 .workbuddy-ai/
+
+# 运行环境检测工具解压产物（ComfyNexusDiag.exe 由 backend/scripts/diagnose_system.py + ComfyNexusDiag.spec 构建，不入库）
+ComfyNexus运行环境检测/
