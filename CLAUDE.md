@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Last verified**: 2026-11-01（「开发注意事项 8/9/10」按 Phase 1.1 密钥整改、Phase 1.2 HTTP 服务加固、Phase 1.3 更新包加固后的实际代码与命令输出核对）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
+> **Last verified**: 2026-11-01（「开发注意事项 8/9/10」按 Phase 1.1 密钥整改、Phase 1.2 HTTP 服务加固、Phase 1.3 更新包加固后的实际代码与命令输出核对；CI 门禁按 `.github/workflows/quality.yml` 与本地实测结果核对）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
 > 结构/版本类信息以本文件为唯一来源；产品功能介绍以根目录 `README.md` 为唯一来源，`source-code/README.md` 只做源码目录导航。
 
 ## 项目概述
@@ -296,9 +296,13 @@ process_manager.start(python_path, comfyui_path, args=None, env_config=None)  # 
   - `pytest-asyncio` 1.4.1 默认 strict 模式：`async def test_*` 必须带 `@pytest.mark.asyncio`，否则报错
 - **属性测试**：hypothesis（`requirements-test.txt`）
 - **测试环境**：`backend/tox.ini` 提供 `py312` / `coverage` / `unit` / `integration` / `properties` 环境
-- **CI/CD**：仓库根 `.github/workflows/` 有 4 个 workflow（`update-version.yml`、`update_nodes.yml`、`update_comfyui_release.yml`、`sync_pytorch_versions.yml`），全部是数据/版本同步类，**没有前端或后端质量门禁**。
-  - `source-code/.github/workflows/`（`lint.yml`、`update-version.yml`）是无效副本：GitHub 只识别仓库根 `.github/`，且 `lint.yml` 里的 `working-directory: frontend` 在本仓库也不存在对应路径
-  - `update-version.yml` 两处内容完全一致（`diff` 无输出）
+- **CI/CD**：仓库根 `.github/workflows/` 共 5 个 workflow：`quality.yml`（质量门禁）、`update-version.yml`、`update_nodes.yml`、`update_comfyui_release.yml`、`sync_pytorch_versions.yml`。
+  - `quality.yml` 由 `push`/`pull_request`（`main`、`develop`）与手动触发，并发组按 workflow+ref 取消旧任务。
+    - **阻断项**：前端 `npx tsc --noEmit`（本地实测 0 错误）；后端 `pytest tests/unit`（本地实测 166 passed / 2 skipped）。
+    - **报告项（`continue-on-error: true`）**：前端 `npm run lint`（2026-11-01 实测 811 errors / 1252 warnings）、`npm run test:run`（548 failed / 1244 passed / 4 skipped）。基线未清零前不阻断合并；清理到 0 后删除对应 `continue-on-error` 即可转为门禁。**不要**用删除测试、扩大 ignore 或 `|| true` 的方式制造绿色。
+  - 后端 job 使用 `windows-latest`（应用仅支持 Windows，且含 `os.name == "nt"` 的 ACL 用例），通过 `PYTHONPATH=<repo>/source-code` 与 `working-directory: source-code/backend` 运行。
+  - 仓库根 `.github/workflows/` 之外还有 `source-code/.github/workflows/update-version.yml`：GitHub 只识别仓库根目录，该文件是**无效副本**（与根目录同名文件内容一致），修改版本号同步逻辑时只改根目录那份。
+  - 原先的 `source-code/.github/workflows/lint.yml` 已删除（其 `working-directory: frontend` 在本仓库不存在对应路径，从未生效）。
 
 ## 调试技巧
 

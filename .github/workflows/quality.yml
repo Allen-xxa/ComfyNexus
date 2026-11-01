@@ -1,0 +1,80 @@
+name: Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (typecheck 阻断 / lint + unit 报告)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: source-code/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: source-code/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check (blocking)
+        run: npx tsc --noEmit
+
+      # 基线未清零：eslint 现有 811 errors / 1252 warnings（2026-11-01 实测）。
+      # 先以报告模式运行，保证结果可见但不阻塞合并；清理到 0 后删除 continue-on-error。
+      - name: ESLint (report-only, baseline 811 errors)
+        continue-on-error: true
+        run: npm run lint
+
+      # 基线未清零：vitest 现有 548 failed / 1244 passed / 4 skipped（2026-11-01 实测）。
+      # 同上，先报告不阻塞；修复后再切换为阻断。
+      - name: Unit tests (report-only, baseline 548 failed)
+        continue-on-error: true
+        run: npm run test:run
+
+  backend:
+    name: Backend unit tests
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: source-code/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            source-code/backend/requirements.txt
+            source-code/backend/requirements-test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Run unit tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/source-code
+        run: python -m pytest tests/unit -o addopts="" -q
