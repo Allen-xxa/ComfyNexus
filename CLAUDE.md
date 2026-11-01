@@ -2,14 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Last verified**: 2026-11-01（对照 commit `14d1b9e`）。文中路径、命令与版本号均以实际命令输出核实；无法用命令验证的性能/体验类描述已标注"未核实"。
+> 结构/版本类信息以本文件为唯一来源；产品功能介绍以根目录 `README.md` 为唯一来源，`source-code/README.md` 只做源码目录导航。
+
 ## 项目概述
 
 ComfyNexus 是一个为 ComfyUI 设计的现代化管理平台（仅支持 Windows），采用 React 19 前端 + Python 后端（pywebview 桌面应用）架构。核心目标是治理和优化 ComfyUI 生态：环境管理、版本控制、插件市场、依赖管理、AI 助手、工作流解析等。
 
 **技术栈：**
-- **前端**: React 19, TypeScript, Vite, TailwindCSS, Zustand, React Router, Radix UI
-- **后端**: Python 3.12+, pywebview, Flask, aiohttp, psutil
-- **内置工具**: MinGit 2.53.0（无需用户安装 Git）
+- **前端**: React 19（`frontend/package.json`: `react ^19.2.0`）, TypeScript, Vite 7, TailwindCSS, Zustand, React Router, Radix UI
+- **后端**: Python **3.12.x**（`backend/requirements.txt` 第 2 行注释声明 `# Python 3.12.x`，无 `python_requires` 元数据），pywebview `>=6.0,<7.0`, Flask, aiohttp, psutil
+  - 本机开发环境为 Python 3.12.3；3.13+ 未验证（`GPUtil 1.4.0` 依赖 `distutils`，需额外安装 `setuptools`；`pythonnet` 存在兼容风险）
+- **Git**: 不在仓库/发布包内自带可执行文件。首次启动由 `backend/main.py` 的 Bootstrap 窗口引导：自动下载 MinGit（`src/utils/mingit_downloader.py`: `DEFAULT_VERSION = "2.53.0.2"`）或使用用户已有的系统 Git
+  - 仓库内的 `backend/MinGit-2.53.0-64-bit/` 只有 181 个配置/文档文件（`git ls-files` 计数），**不含 `git.exe`**；`build_exe.spec` 与 `build_scripts/*.ps1` 中也没有 MinGit 打包逻辑
 
 ## 关键构建命令
 
@@ -28,7 +33,7 @@ npm run test         # Vitest watch 模式（本地开发）
 npm run test:ui      # Vitest UI 模式
 npm run test:coverage  # 覆盖率报告
 
-# 后端开发（需要 Python 3.12+）
+# 后端开发（需要 Python 3.12.x，本机使用 3.12.3）
 cd source-code/backend
 python -m venv .venv
 .venv\Scripts\activate
@@ -54,20 +59,24 @@ python main.py
 ### 生产构建
 
 ```powershell
-# 从项目根目录执行
+# build.ps1 / quick_build.ps1 都位于 source-code/ 目录（仓库根目录没有这两个脚本）
+cd source-code
 .\build.ps1 -Version "1.0.2"
 
-# 可选参数：
+# build.ps1 支持的参数（见 source-code/build.ps1 param 块）：
+# -Version       指定版本号，缺省时读 source-code/comfy_nexus_version.py 的 __version__
 # -SkipFrontend  跳过前端构建
 # -SkipClean     跳过清理
 # -SkipTests     跳过测试
 # -VerboseOutput 详细输出
 
-# 快速构建（跳过测试和前端）
-.\build.ps1 -SkipTests -SkipFrontend
+# quick_build.ps1 没有任何参数（Get-Command 实测 Parameters 数量为 0），只能交互式使用
+.\quick_build.ps1
 
 # 构建产物位于 source-code/build_scripts/打包产物_<版本号>/
 ```
+
+版本号唯一来源：`source-code/comfy_nexus_version.py`（当前 `__version__ = "v1.2.5"`），缺省回落值 `"1.0.0"`（`build_scripts/构建工具库.ps1:93-117`）。**不存在名为 `VERSION` 的文件。**
 
 ## 架构设计
 
@@ -79,8 +88,11 @@ frontend/
 │   ├── pages/          # 页面组件（与侧边栏菜单一一对应）
 │   ├── components/     # 可复用 UI 组件
 │   ├── contexts/       # React Context（全局状态）
+│   ├── stores/         # Zustand store
+│   ├── utils/          # 工具函数（另有 types/、mocks/、test/）
 │   ├── hooks/          # 自定义 React hooks
-│   ├── api/            # 与后端 API 的桥接层
+│   ├── api/            # 部分后端桥接封装（现有 3 个模块：dependencyApi / githubApi / workflow）
+│   ├── services/       # 另一部分封装（bridge / pluginService / PluginAPIService / pluginMarketplaceService / versionApi）
 │   ├── router/         # 路由配置
 │   ├── i18n/           # 国际化配置
 │   └── lib/            # 工具函数库
@@ -90,7 +102,7 @@ frontend/
 
 **关键约定：**
 - **页面与路由**：每个 `pages/` 下的文件对应一个路由，路由配置在 `router/` 中集中管理
-- **API 调用**：通过 `window.pywebview.api.<method>()` 调用后端，统一在 `api/` 目录封装
+- **API 调用**：通过 `window.pywebview.api.<method>()` 调用后端。现状是**未完全收敛**：`src/` 下（排除 `__tests__`）有 64 个文件、268 处直接引用 `window.pywebview.api`（`grep -rln` 实测），封装分散在 `api/`（3 个模块）与 `services/`（5 个模块）两处。新增调用请放进 `api/` 或 `services/`，不要在组件里直接摸 `window`。
 - **状态管理**：全局状态使用 Zustand，局部状态优先使用 React hooks
 - **样式规范**：TailwindCSS utility-first，避免内联样式，复用 `components/ui/` 下的基础组件
 
@@ -100,7 +112,7 @@ frontend/
 backend/
 ├── src/
 │   ├── bridge/         # 前端桥接层
-│   │   ├── Api.py      # 暴露给前端的主 API 类
+│   │   ├── api.py      # 暴露给前端的主 API 类（`class Api`）
 │   │   └── controllers/  # 业务逻辑控制器
 │   ├── core/           # 核心业务层
 │   │   ├── env/        # 环境管理（EnvironmentManager 核心）
@@ -111,13 +123,13 @@ backend/
 │   │   └── config/     # 配置管理器
 │   ├── utils/          # 工具函数（logger, file_ops, etc.）
 │   └── gallery/        # 资产库（图片 NSFW 检测、瀑布流）
-├── main.py             # 应用入口
-├── MinGit-2.53.0-64-bit/  # 内置 Git（免安装）
+├── main.py             # 应用入口（含首次启动的 Git/MinGit Bootstrap 引导）
+├── MinGit-2.53.0-64-bit/  # 仅配置与文档骨架，**不含 git.exe**；可执行文件由 Bootstrap 下载或指向系统 Git
 └── tests/              # 测试套件
 ```
 
 **关键约定：**
-- **API 暴露规则**：`Api.py` 中仅公开方法暴露给前端，私有属性以 `_` 开头（pywebview 序列化限制）
+- **API 暴露规则**：`src/bridge/api.py` 的 `class Api` 中仅公开方法暴露给前端，私有属性以 `_` 开头（pywebview 序列化限制）
 - **环境管理**：`EnvironmentManager` 是核心，负责 ComfyUI 环境的扫描、验证、配置和启动
 - **控制器职责**：`controllers/` 层处理业务逻辑，`core/` 层是纯业务服务，避免循环依赖
 - **日志规范**：使用 `backend.src.utils.logger` 的 `app_logger`，支持 emoji 自动替换（Windows 控制台兼容）
@@ -127,7 +139,7 @@ backend/
 ```
 前端组件
    ↓ (window.pywebview.api.method())
-Api.py（路由层）
+api.py 的 class Api（路由层）
    ↓
 Controller（业务逻辑层）
    ↓
@@ -136,9 +148,11 @@ Core Service（核心服务层）
 File/Git/Process（系统层）
 ```
 
-**示例：**
-- 用户点击"启动 ComfyUI" → `EnvironmentController.start_comfy()` → `ProcessManager.start()` → 启动子进程
-- 插件市场搜索 → `MarketplaceControllerBridge.search_plugins()` → `CacheService.get()` → 三级缓存（内存/文件/网络）
+**示例（按实际代码核对）：**
+- 用户点击"启动 ComfyUI" → 前端 `window.pywebview.api.start_comfyui(env_id)` → `api.py:2816 start_comfyui()`（逻辑写在 `Api` 里，用 `self.__init_process_manager()` 起 `ProcessManager`）→ 子进程
+  - `EnvironmentController` 负责环境增删改查/预设/扫描等方法，**没有** `start_comfy()`
+- 插件市场列表 → `MarketplaceControllerBridge.search_plugins()`（`bridge/controllers/marketplace_controller_bridge.py:114`）→ `core/marketplace/marketplace_controller.py` → `CacheManager`（**文件缓存**，`cache_manager.py:26`）→ `PluginDataFetcher`（网络）
+  - 实测只有"文件缓存 + 网络"两级；`grep -rn "三级缓存" backend/src` 无命中
 
 ## 关键模块说明
 
@@ -151,60 +165,69 @@ File/Git/Process（系统层）
 - **DependencyDetector**: 检测 Python/PyTorch/CUDA 版本
 
 ### 插件管理 (`core/plugin/`)
-- **PluginManager**: 安装、更新、启用/禁用插件
-- **DependencyAnalyzer**: 分析插件依赖树和版本冲突
-- **ConflictDetector**: 检测并标记依赖冲突（严重程度分级）
+- **PluginManager**: 安装、更新、启用/禁用插件（`plugin_manager.py`）
+- 同目录还有 `dependency_checker.py` / `dependency_manager.py` / `git_permission_fixer.py` / `plugin_backup.py` / `plugin_scanner.py` 等
+
+### 依赖分析 (`core/dependency/`)
+- **DependencyAnalyzer**: 分析 Python 依赖树和版本冲突（`dependency_analyzer.py`）
+- **ConflictDetector**: 检测并标记依赖冲突（`conflict_detector.py`）
 
 ### AI 助手 (`core/ai/`)
-多模型支持（OpenAI, Claude, Ollama, 智谱, 讯飞星火等）：
-- **AIService**: 统一 AI 调用接口
+已注册的 Provider（`providers/factory.py` 的 `_providers`）：`openai`、`xflow`、`iflow`、`custom-openai`（以上复用 `OpenAIProvider`）、`spark`（讯飞星火）、`volcengine`（火山引擎）、`zhipu`（智谱）、`ollama`。
+**没有 Anthropic/Claude 原生 Provider**；Claude 只能通过兼容 OpenAI 接口的中转服务接入。
+- **AIService**: 统一 AI 调用接口（`ai_service.py`）
 - **providers/**: 各模型的适配器（BaseProvider 继承）
-- **search/**: 联网搜索（DuckDuckGo, Google）
-- **DocumentProcessor**: 文档/图片分析
+- **search/**: 联网搜索（`search_manager.py`: DuckDuckGo 始终可用，Google 需 api_key + search_engine_id，Tavily 需 api_key）
+- **DocumentProcessor**: 文档/图片分析（`document_processor.py`）
 
 ### 缓存系统 (`core/cache/`)
-三级缓存策略（内存 → 文件 → 网络）：
-- **CacheService**: 统一缓存入口
-- 支持过期策略、手动刷新、按需清理
+`CacheService`（`cache_service.py:33`）是**缓存统计与清理**服务，公开方法只有 `get_cache_stats / get_all_cache_stats / clear_cache / clear_all_caches / get_cache_types`，**没有 `get()` 读取接口**。
+- 管理 5 类缓存：`version / translation / plugin / update / marketplace`（`CacheType`, `cache_service.py:24-31`），落在 `get_cache_dir()` 下（translation 用 `translation_cache.db`）
+- 真正的"读取缓存 → 回源网络"逻辑在 `core/marketplace/`（`CacheManager` + `PluginDataFetcher`），是文件缓存 + 网络两级
 
 ## 开发注意事项
 
 ### 1. 添加新功能时
 - **前端页面**：在 `pages/` 下添加 `.tsx` 文件，在 `router/` 注册路由
-- **后端 API**：在 `Api.py` 中添加公开方法（非私有），在 `controllers/` 实现逻辑
+- **后端 API**：在 `src/bridge/api.py` 的 `class Api` 中添加公开方法（非私有），在 `controllers/` 实现逻辑
 - **测试**：前端在组件同目录加 `.test.tsx`，后端在 `tests/` 下添加 `test_*.py`
 
 ### 2. Git 操作
-应用内置 MinGit，通过 `GitManager` 类操作，不要直接调用 `subprocess`：
+Git 可执行文件由首次启动的 Bootstrap 引导获得（下载 MinGit 或复用系统 Git），统一通过 `get_git_executable()`（`src/utils/git_config.py`）解析，不要直接调用 `subprocess`。
+业务侧用 `GitManager`（`src/core/git_manager.py`）的方法，注意它**没有** `clone()` / `checkout_branch()`：
 ```python
 from backend.src.core.git_manager import GitManager
 git_manager = GitManager(repo_path)
-git_manager.clone(url)
-git_manager.checkout_branch(branch_name)
+git_manager.get_versions(version_type='stable')   # 版本列表
+git_manager.switch_version(version_id)            # 切换稳定版/开发版
+git_manager.rollback_to_commit(commit_hash)       # 回退到指定提交
+git_manager.get_branches() / git_manager.switch_branch(branch_name)
 ```
+（另有 `src/utils/git_manager.py`，是 MinGit/系统 Git 的**可用性检测**，与上面的 `GitManager` 类不同名同义，别混用。）
 
 ### 3. 进程管理
-ComfyUI 启动使用 `ProcessManager`，自动处理端口冲突、进程检测、日志捕获：
+ComfyUI 启动使用 `ProcessManager`（`src/core/process_manager.py`），自动处理端口冲突、进程检测、日志捕获。实际签名：
 ```python
-from backend.src.core.process_manager import ProcessManager
-process_manager.start(python_path, script_path, args, cwd)
+process_manager.start(python_path, comfyui_path, args=None, env_config=None)  # -> Dict
 ```
 
 ### 4. 依赖冲突处理
-使用 `DependencyAnalyzer` 分析依赖树，`ConflictDetector` 检测冲突：
-- 冲突分级：info（无影响）、warning（可能影响）、error（严重冲突）
-- 自动生成修复建议（手动 pip install 或 requirements.txt）
+`DependencyAnalyzer` 与 `ConflictDetector` 位于 **`core/dependency/`**（不在 `core/plugin/`）：
+- 冲突分级实测为 `'critical' | 'warning' | 'info'`（`conflict_detector.py:299-329`、`models.py:69`），没有 `error` 等级
+- `_generate_suggestion()` 生成修复建议
 
 ### 5. 国际化
 - 前端：在 `i18n/locales/` 下添加翻译（中英文必备）
 - 使用 `react-i18next` 的 `useTranslation` hook
 
 ### 6. 构建与打包
-- PyInstaller 配置文件：`build_exe.spec`（发布版）、`build_exe_debug.spec`（调试版）
-- 构建脚本会自动：
-  1. 构建前端 → 产出到 `source-code/dist/`
-  2. 打包后端 → PyInstaller 将 Python 代码打包成 exe
-  3. 合并产物 → 最终发布包包含前端静态文件 + exe + 依赖
+- PyInstaller 配置（均在 `source-code/`）：`build_exe.spec`（发布版，`console=False`）、`build_exe_debug.spec`（调试版，`console=True`）、`backend/updater/updater.spec`（更新器，由 `build_scripts/构建.ps1:300` 调用）
+  - 仓库根还有个 `ComfyNexus.spec`（`console=True`），在 `build_scripts/*.ps1` 中**没有任何引用**（`grep -rn "\.spec" build_scripts/` 实测）
+- 构建脚本（`source-code/build.ps1` → `build_scripts/构建.ps1`）会自动：
+  1. 构建前端 → 产出到 `source-code/dist/`（`构建.ps1:35` 的 `$TempDistDir`）
+  2. 打包后端 → PyInstaller 生成 exe
+  3. 合并产物 → `source-code/build_scripts/打包产物_<版本号>/`
+- 注意：**构建脚本不打包 MinGit**，Git 由应用首次启动的 Bootstrap 引导下载或复用系统 Git
 
 ### 7. 构建产物与版本控制（重要）
 
@@ -223,10 +246,16 @@ process_manager.start(python_path, script_path, args, cwd)
 
 ## 测试策略
 
-- **前端测试**：Vitest + Testing Library，覆盖 UI 组件和页面逻辑
-- **后端测试**：pytest，标记分级：`@pytest.mark.unit`、`@pytest.mark.integration`、`@pytest.mark.slow`
-- **属性测试**：使用 hypothesis 进行基于属性的测试（边界场景）
-- **CI/CD**：未配置 GitHub Actions，手动构建发布
+- **前端测试**：Vitest 4 + Testing Library；`npm run test` 是 watch 模式，CI/一次性验证用 `npm run test:run`
+- **后端测试**：pytest，配置在 `backend/pyproject.toml`（`testpaths = ["tests"]`，`addopts = -v --strict-markers --tb=short -s --color=yes`）
+  - 已注册标记：`property`、`unit`、`integration`、`manual`、`diagnostic`、`slow`（`pyproject.toml:20-26`）
+  - 想换输出格式需覆盖 addopts：`python -m pytest -o addopts="" -q tests/unit`
+  - `pytest-asyncio` 1.4.1 默认 strict 模式：`async def test_*` 必须带 `@pytest.mark.asyncio`，否则报错
+- **属性测试**：hypothesis（`requirements-test.txt`）
+- **测试环境**：`backend/tox.ini` 提供 `py312` / `coverage` / `unit` / `integration` / `properties` 环境
+- **CI/CD**：仓库根 `.github/workflows/` 有 4 个 workflow（`update-version.yml`、`update_nodes.yml`、`update_comfyui_release.yml`、`sync_pytorch_versions.yml`），全部是数据/版本同步类，**没有前端或后端质量门禁**。
+  - `source-code/.github/workflows/`（`lint.yml`、`update-version.yml`）是无效副本：GitHub 只识别仓库根 `.github/`，且 `lint.yml` 里的 `working-directory: frontend` 在本仓库也不存在对应路径
+  - `update-version.yml` 两处内容完全一致（`diff` 无输出）
 
 ## 调试技巧
 
@@ -236,13 +265,16 @@ process_manager.start(python_path, script_path, args, cwd)
 - 开发模式下后端托管的是 `source-code/dist/`，改完前端需重新 `npm run build` 才能在桌面窗口看到效果
 
 ### 后端调试
-- 主入口 `main.py` 顶部有 `SIMULATE_FROZEN = True` 开关，模拟打包环境
-- 日志文件位置：`data/logs/app.log`（自动轮转）
+- `main.py:58` 的 `SIMULATE_FROZEN = True` 用于模拟打包环境；注意当前 `elif SIMULATE_FROZEN` 与 `else` 两个分支的 `base_path` 表达式相同（`Path(__file__).parent.parent` → `source-code/`），因此该开关本身不改变路径解析，只在 frozen 判定顺序上有意义
+- **日志位置**：`source-code/logs/comfynexus_<YYYYMMDD_HHMMSS>.log`
+  - 目录由 `src/utils/paths.py` 的 `get_log_dir()`（`<项目根>/logs`）决定，`src/utils/logger.py:415-417` 调用；写入用自定义 `DateRotatingFileHandler`（`logger.py:258`、`:455`）
+  - 清理策略：按数量保留 10 个（`cleanup_old_logs_by_count`, `logger.py:186`）或按天数保留 30 天（`cleanup_old_logs`, `logger.py:103`）
+  - 不存在 `data/logs/app.log` 这个路径
 - 使用 `app_logger.debug()` 输出调试信息
 
 ### 常见问题
-1. **端口占用**：检查 8188 端口是否被占用，前端会显示冲突提示
-2. **Git 权限**：内置 MinGit 位于 `backend/MinGit-2.53.0-64-bit/`
+1. **端口占用**：默认端口 8188（`src/core/env/environment_manager.py:88`），检查是否被占用，前端会显示冲突提示
+2. **Git 不可用**：`backend/MinGit-2.53.0-64-bit/` 只有配置骨架、没有 `git.exe`；实际 Git 由首次启动的 Bootstrap 窗口下载 MinGit 2.53.0.2 或指定系统 Git，路径通过 `src/utils/git_config.py:20 get_git_executable()` 解析
 3. **依赖冲突**：使用 `依赖管理` 页面的冲突检测功能排查
 
 ## 代码风格
