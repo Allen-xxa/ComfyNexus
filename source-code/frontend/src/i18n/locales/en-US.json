@@ -2523,6 +2523,10 @@
     "logLevelError": "Error messages like exception catches, operation failures, etc.",
     "generateAndCopyToken": "Click \"Generate token\" to generate and copy Token",
     "openGithubTokenPage": "Open GitHub Token creation page",
+    "autoUpdateOnStartup": {
+      "label": "Check for updates on startup",
+      "description": "When enabled, checks about 2 seconds after launch and then every 10 minutes; when disabled, never checks"
+    },
     "comfyuiStartupAction": {
       "label": "Action after ComfyUI starts",
       "workspace": "Open in Workspace",

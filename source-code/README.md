@@ -77,5 +77,5 @@ python -m pytest -o addopts="" -q tests/unit     # 仅单元测试
 - **开发模式看的是 `source-code/dist/`**：改完前端必须重新 `npm run build`，桌面窗口才会更新；只开 `npm run dev` 时改的是浏览器里的页面。
 - **`npm run test` 是 watch 模式**，一次性验证请用 `npm run test:run`。
 - **全量打包脚本要求 `source-code/.venv`**，与开发用的 `source-code/backend/.venv` 不是同一个目录，详见 `build_scripts/打包说明.md` 的"注意事项"。
-- **应用自动更新默认关闭**（`backend/src/core/settings_manager.py` 的 `general.autoUpdate = false`），且当前设置界面没有对应开关。
+- **应用自动更新默认关闭**（`backend/src/core/settings_manager.py` 的 `general.autoUpdate = false`），开关位于「系统设置 → 通用 → 启动时检查更新」。关闭时启动不检查、也不做 10 分钟轮询；开启后启动约 2 秒检查一次，之后每 10 分钟轮询。
 - 构建产物（`dist/`、`build/`、`backend/{build,dist}/`、`frontend/coverage/`、`frontend/tsconfig.tsbuildinfo`）**不纳入版本控制**，规则见 `../CLAUDE.md` 第 7 节。

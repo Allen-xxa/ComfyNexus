@@ -313,6 +313,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         // 转换后端格式到前端格式
         set({
           systemSettings: {
+            autoUpdate: settings.general?.autoUpdate ?? false,
             comfyuiStartupAction: settings.general?.comfyuiStartupAction || 'workspace',
             selectedBrowser: settings.general?.selectedBrowser || '',
             theme: settings.appearance?.theme || 'light',

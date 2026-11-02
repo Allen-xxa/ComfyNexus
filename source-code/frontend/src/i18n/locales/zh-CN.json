@@ -2641,6 +2641,10 @@
     "logLevelError": "错误信息，如异常捕获、操作失败等",
     "generateAndCopyToken": "点击 \"Generate token\" 生成并复制 Token",
     "openGithubTokenPage": "打开 GitHub Token 创建页面",
+    "autoUpdateOnStartup": {
+      "label": "启动时检查更新",
+      "description": "开启后启动约 2 秒检查一次，之后每 10 分钟检查一次；关闭则完全不检查"
+    },
     "comfyuiStartupAction": {
       "label": "ComfyUI 启动后操作",
       "workspace": "在工作台打开",

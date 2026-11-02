@@ -15,12 +15,14 @@ export function useAutoUpdateCheck() {
     hasViewed
   } = useAppUpdateStore()
 
-  // 尊重「系统设置 → 自动更新」开关。
+  // 尊重「系统设置 → 启动时检查更新」开关。
   // 该开关此前只存不读，导致无论是否关闭都会在启动后自动检查更新。
   const autoUpdate = useSettingsStore((state) => state.systemSettings?.autoUpdate ?? false)
   
   const isCheckingRef = useRef(isChecking)
   const hasCheckedRef = useRef(false)
+  // 记录上一次的开关状态，用于在「关 → 开」时允许重新发起一次检查
+  const prevAutoUpdateRef = useRef(autoUpdate)
 
   useEffect(() => {
     isCheckingRef.current = isChecking
@@ -67,8 +69,14 @@ export function useAutoUpdateCheck() {
 
   useEffect(() => {
     if (!autoUpdate) {
-      console.log('[AutoUpdateCheck] 自动更新已关闭，跳过启动检查与定时轮询')
+      console.log('[AutoUpdateCheck] 启动时检查更新已关闭，跳过启动检查与定时轮询')
       return
+    }
+
+    // 开关由「关」变「开」时重置标记，让用户可以立即触发一次检查
+    if (prevAutoUpdateRef.current !== autoUpdate) {
+      prevAutoUpdateRef.current = autoUpdate
+      hasCheckedRef.current = false
     }
 
     if (hasCheckedRef.current) {
@@ -76,44 +84,53 @@ export function useAutoUpdateCheck() {
     }
     hasCheckedRef.current = true
 
+    let waitInterval: ReturnType<typeof setInterval> | null = null
+    let waitTimeout: ReturnType<typeof setTimeout> | null = null
+    let initialTimer: ReturnType<typeof setTimeout> | null = null
+    let periodicInterval: ReturnType<typeof setInterval> | null = null
+
+    const startPeriodicCheck = () => {
+      if (periodicInterval) return
+      periodicInterval = setInterval(() => {
+        console.log('[AutoUpdateCheck] 定时检查更新...')
+        checkForUpdate()
+      }, CHECK_INTERVAL)
+    }
+
     const api = (window as any).pywebview?.api
     if (!api) {
       console.log('[AutoUpdateCheck] Waiting for API...')
-      
-      const checkInterval = setInterval(() => {
+
+      waitInterval = setInterval(() => {
         if ((window as any).pywebview?.api) {
-          clearInterval(checkInterval)
+          if (waitInterval) {
+            clearInterval(waitInterval)
+            waitInterval = null
+          }
           checkForUpdate()
           startPeriodicCheck()
         }
       }, 500)
-      
-      const timeout = setTimeout(() => {
-        clearInterval(checkInterval)
+
+      waitTimeout = setTimeout(() => {
+        if (waitInterval) {
+          clearInterval(waitInterval)
+          waitInterval = null
+        }
       }, 10000)
-      
-      return () => {
-        clearInterval(checkInterval)
-        clearTimeout(timeout)
-      }
     } else {
-      const initialTimer = setTimeout(() => {
+      initialTimer = setTimeout(() => {
         checkForUpdate()
         startPeriodicCheck()
       }, INITIAL_DELAY)
-      
-      return () => clearTimeout(initialTimer)
     }
 
-    function startPeriodicCheck() {
-      const intervalId = setInterval(() => {
-        console.log('[AutoUpdateCheck] 定时检查更新...')
-        checkForUpdate()
-      }, CHECK_INTERVAL)
-      
-      window.addEventListener('beforeunload', () => {
-        clearInterval(intervalId)
-      })
+    // 开关关闭或组件卸载时，必须同时清理启动检查与定时轮询
+    return () => {
+      if (waitInterval) clearInterval(waitInterval)
+      if (waitTimeout) clearTimeout(waitTimeout)
+      if (initialTimer) clearTimeout(initialTimer)
+      if (periodicInterval) clearInterval(periodicInterval)
     }
   }, [checkForUpdate, autoUpdate])
 

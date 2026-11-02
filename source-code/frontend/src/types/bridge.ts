@@ -176,6 +176,7 @@ export interface PyWebViewAPI {
     settings: {
       version: string
       general: {
+        autoUpdate?: boolean  // 启动时检查更新开关
         comfyuiStartupAction?: 'workspace' | 'browser' | 'none'
         selectedBrowser?: string  // 浏览器exe路径，空字符串表示系统默认
       }

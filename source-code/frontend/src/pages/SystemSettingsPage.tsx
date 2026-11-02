@@ -340,6 +340,23 @@ export default function SystemSettingsPage() {
                     </NativeSelect>
                   </div>
                   
+                  {/* 启动时检查更新 */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <Label className="whitespace-nowrap text-sm font-medium">
+                        {t('settings.autoUpdateOnStartup.label')}
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {t('settings.autoUpdateOnStartup.description')}
+                      </p>
+                    </div>
+                    <Switch
+                      aria-label={t('settings.autoUpdateOnStartup.label')}
+                      checked={settings.autoUpdate ?? false}
+                      onCheckedChange={(checked) => setSettings({ ...settings, autoUpdate: checked })}
+                    />
+                  </div>
+
                   {/* 重置所有重要提示 */}
                   <div className="border-t border-border pt-4">
                     <div className="flex items-center justify-between gap-4">
