@@ -6,8 +6,6 @@ import {
   TechStackSection,
   ChangelogSection,
   Disclaimer,
-  SponsorSection,
-  TelegramSection,
 } from '@/components/about'
 
 export default function AboutPage() {
@@ -29,15 +27,7 @@ export default function AboutPage() {
             </div>
           </div>
 
-          <div className="grid flex-1 grid-cols-1 items-stretch gap-6 md:grid-cols-3">
-            <div className="flex flex-col md:col-span-2">
-              <ChangelogSection className="flex-1" />
-            </div>
-            <div className="flex flex-col gap-6 md:col-span-1">
-              <SponsorSection className="flex-1" />
-              <TelegramSection className="flex-1" />
-            </div>
-          </div>
+          <ChangelogSection />
 
           <footer className="space-y-3 border-t border-border pt-4 text-center">
             <Disclaimer />

@@ -324,6 +324,16 @@ export interface PyWebViewAPI {
     }>
     message?: string
   }>;
+
+  /** 读取随应用分发的 version.json，用于离线展示更新日志 */
+  get_local_release_info: () => Promise<{
+    success: boolean
+    version?: string
+    published_at?: string
+    release_notes?: string
+    file_size?: number
+    error?: string
+  }>;
   
   get_last_commit_time: (owner: string, repo: string, branch?: string) => Promise<{
     success: boolean

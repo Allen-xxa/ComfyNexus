@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RefreshCw, Download, Github } from 'lucide-react'
-import { toast } from '@/utils/toast'
+import { Github, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { useAppUpdateStore, LocalFileInfo } from '@/stores/useAppUpdateStore'
+import { useAppUpdateStore } from '@/stores/useAppUpdateStore'
+import { GITHUB_RELEASES_URL } from '@/api/githubApi'
 
 import { UpdateDialog } from './UpdateDialog'
 
@@ -14,9 +14,8 @@ interface AboutHeaderProps {
 export function AboutHeader({ version }: AboutHeaderProps) {
   const { t } = useTranslation()
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [isChecking, setIsChecking] = useState(false)
   const hasAutoOpenedRef = useRef(false)
-  const { hasUpdate, hasViewed, setChecking, setHasUpdate, markAsViewed, setLocalFileInfo } = useAppUpdateStore()
+  const { hasUpdate, hasViewed, markAsViewed } = useAppUpdateStore()
 
   const showBadge = hasUpdate && !hasViewed
 
@@ -27,77 +26,17 @@ export function AboutHeader({ version }: AboutHeaderProps) {
     }
   }, [hasUpdate, hasViewed])
 
-  const handleCheckUpdate = useCallback(async () => {
-    if (isChecking) return
-
-    const { updateInfo } = useAppUpdateStore.getState()
-    
-    if (hasUpdate && updateInfo) {
-      setDialogOpen(true)
-      return
-    }
-
-    setIsChecking(true)
-    setChecking(true)
-
-    try {
-      const api = (window as any).pywebview?.api
-      if (!api) {
-        toast.error(t('update.networkError'))
-        return
-      }
-
-      const result = await api.check_for_update()
-      setChecking(false)
-
-      if (!result.success) {
-        toast.error(result.error || t('update.updateError'))
-        return
-      }
-
-      if (result.has_update) {
-        setHasUpdate(true, {
-          currentVersion: result.current_version,
-          latestVersion: result.latest_version,
-          downloadUrl: result.download_url,
-          releaseNotes: result.release_notes,
-          publishedAt: result.published_at,
-          fileSize: result.file_size,
-          fileHash: result.file_hash
-        })
-        
-        const localResult = await api.check_local_update()
-        if (localResult.success) {
-          const localInfo: LocalFileInfo = {
-            exists: localResult.has_local_file,
-            filePath: localResult.file_path,
-            hashMatch: localResult.hash_match,
-            fileSize: localResult.file_size,
-            partialDownload: localResult.partial_download
-          }
-          setLocalFileInfo(localInfo)
-        }
-        
-        setDialogOpen(true)
-      } else {
-        setHasUpdate(false, null)
-        setLocalFileInfo(null)
-        toast.success(t('update.noUpdate'))
-      }
-    } catch (err) {
-      setChecking(false)
-      toast.error(err instanceof Error ? err.message : t('update.networkError'))
-    } finally {
-      setIsChecking(false)
-    }
-  }, [isChecking, hasUpdate, setChecking, setHasUpdate, setLocalFileInfo, t])
-
   const handleDialogOpenChange = useCallback((open: boolean) => {
     setDialogOpen(open)
     if (!open && hasUpdate) {
       markAsViewed()
     }
   }, [hasUpdate, markAsViewed])
+
+  // 本 fork 不发布安装包，本地更新检查没有意义，直接引导到 Releases 页面
+  const handleOpenReleases = useCallback(() => {
+    window.open(GITHUB_RELEASES_URL, '_blank', 'noopener,noreferrer')
+  }, [])
 
   return (
     <>
@@ -132,27 +71,16 @@ export function AboutHeader({ version }: AboutHeaderProps) {
           </div>
         </div>
         <div className="relative">
-          {hasUpdate ? (
-            <Button 
-              onClick={handleCheckUpdate} 
-              size="sm" 
-              className="text-success-foreground flex items-center gap-2 bg-success hover:bg-success/90"
-            >
-              <Download className="size-4" />
-              {t('update.updateNow') || '立即更新'}
-            </Button>
-          ) : (
-            <Button 
-              onClick={handleCheckUpdate} 
-              size="sm" 
-              variant="outline" 
-              className="flex items-center gap-2"
-              disabled={isChecking}
-            >
-              <RefreshCw className={cn("w-4 h-4", isChecking && "animate-spin")} />
-              {isChecking ? t('update.checking') : t('update.checkUpdate')}
-            </Button>
-          )}
+          <Button 
+            onClick={handleOpenReleases} 
+            size="sm" 
+            variant="outline" 
+            className="flex items-center gap-2"
+            title={GITHUB_RELEASES_URL}
+          >
+            <ExternalLink className="w-4 h-4" />
+            {t('update.checkUpdate')}
+          </Button>
           {showBadge && (
             <span className="absolute -right-1 -top-1 size-2.5 animate-pulse rounded-full border-2 border-background bg-success" />
           )}
@@ -166,10 +94,6 @@ export function AboutHeader({ version }: AboutHeaderProps) {
       />
     </>
   )
-}
-
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ')
 }
 
 export default AboutHeader

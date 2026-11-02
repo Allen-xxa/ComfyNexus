@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import {
   fetchReleases,
+  fetchLocalRelease,
   parseReleaseBody,
   formatReleaseDate,
   GITHUB_RELEASES_URL,
@@ -22,14 +23,31 @@ export function ChangelogSection({ className }: ChangelogSectionProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
+  /**
+   * 先用本地 version.json 秒开，再尝试拉远端 Release。
+   * GitHub 不可达时后端要等 15 秒超时，不能让用户一直看加载中。
+   */
   const loadReleases = async () => {
     setIsLoading(true)
     setError(null)
+
+    const local = await fetchLocalRelease()
+    if (local) {
+      setReleases([local])
+      setIsLoading(false)
+    }
+
     try {
-      const data = await fetchReleases()
-      setReleases(data)
+      const remote = await fetchReleases()
+      if (remote.length > 0) {
+        setReleases(remote)
+      } else if (!local) {
+        setReleases([])
+      }
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Unknown error'))
+      if (!local) {
+        setError(err instanceof Error ? err : new Error('Unknown error'))
+      }
     } finally {
       setIsLoading(false)
     }
@@ -68,7 +86,8 @@ export function ChangelogSection({ className }: ChangelogSectionProps) {
     <div className="relative ml-2 space-y-4 border-l border-border">
       {releases.map((release, index) => {
         const changes = parseReleaseBody(release.body)
-        const isLatest = index === 0
+        // id 为 0 表示来自本地 version.json 的兜底数据，不声称是"最新"
+        const isLatest = index === 0 && release.id !== 0
 
         return (
           <div key={release.id} className="relative pl-4">

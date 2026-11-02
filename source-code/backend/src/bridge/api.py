@@ -1504,7 +1504,65 @@ class Api:
                             logger.info(f"[get_app_version] 解析版本: {version}")
                             return version
             return "1.0.0"
-    
+
+    def get_local_release_info(self):
+        """
+        读取随应用分发的 version.json，作为离线可用的更新日志来源。
+
+        GitHub API 在部分网络环境下不可达，或 fork 尚无 Release 时，
+        前端用它兜底展示当前构建的更新说明。
+
+        Returns:
+            dict: {
+                "success": bool,
+                "version": str,
+                "published_at": str,
+                "release_notes": str,
+                "file_size": int,
+                "error": str (失败时)
+            }
+        """
+        import json
+        from backend.src.utils.paths import get_project_root, get_internal_dir
+
+        project_root = get_project_root()
+        candidates = [
+            project_root / "version.json",
+            # 开发环境 project_root 是 source-code/，真正的发布元数据在仓库根目录；
+            # 打包环境这里是 exe 同级目录的上一级，通常不存在，不会误读。
+            project_root.parent / "version.json",
+            get_internal_dir() / "version.json",
+        ]
+
+        best = None
+        for path in candidates:
+            try:
+                if not path.is_file():
+                    continue
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    continue
+                # 取发布时间最新的一份：开发环境里 source-code/version.json 往往是旧数据
+                published = str(data.get("published_at", ""))
+                if best is None or published > best[0]:
+                    best = (published, data, path)
+            except Exception as e:
+                logger.warning(f"[get_local_release_info] 读取 {path} 失败: {e}")
+
+        if best is not None:
+            _, data, path = best
+            logger.dev(f"[get_local_release_info] 使用 {path}")
+            return {
+                "success": True,
+                "version": str(data.get("version", "")),
+                "published_at": str(data.get("published_at", "")),
+                "release_notes": str(data.get("release_notes", "")),
+                "file_size": int(data.get("file_size") or 0),
+            }
+
+        logger.warning("[get_local_release_info] 未找到可用的本地 version.json")
+        return {"success": False, "error": "本地 version.json 不存在"}
+
     # ========== 模块配置管理 API ==========
     
     def get_module_config(self):
