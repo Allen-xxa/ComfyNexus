@@ -119,7 +119,7 @@ export function AboutHeader({ version }: AboutHeaderProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => window.open('https://github.com/Allen-xxa/ComfyNexus', '_blank', 'noopener,noreferrer')}
+                onClick={() => window.open('https://github.com/qiqStrong/ComfyNexus', '_blank', 'noopener,noreferrer')}
                 className="size-7 rounded-md"
                 title="GitHub"
               >

@@ -7,8 +7,8 @@
 <p><strong>为专业创作者而生的 ComfyUI 现代化管理平台</strong></p>
 
 <p>
-  <a href="https://github.com/Allen-xxa/ComfyNexus/releases">
-    <img src="https://img.shields.io/github/v/release/Allen-xxa/ComfyNexus?style=flat-square&color=3b82f6" alt="Version">
+  <a href="https://github.com/qiqStrong/ComfyNexus/releases">
+    <img src="https://img.shields.io/github/v/release/qiqStrong/ComfyNexus?style=flat-square&color=3b82f6" alt="Version">
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
@@ -16,8 +16,8 @@
   <a href="https://www.microsoft.com/windows">
     <img src="https://img.shields.io/badge/platform-Windows-6366f1?style=flat-square" alt="Platform">
   </a>
-  <a href="https://github.com/Allen-xxa/ComfyNexus/releases">
-    <img src="https://img.shields.io/github/downloads/Allen-xxa/ComfyNexus/total?style=flat-square&color=f59e0b" alt="Downloads">
+  <a href="https://github.com/qiqStrong/ComfyNexus/releases">
+    <img src="https://img.shields.io/github/downloads/qiqStrong/ComfyNexus/total?style=flat-square&color=f59e0b" alt="Downloads">
   </a>
 </p>
 
@@ -165,7 +165,7 @@
 
 ### 安装步骤
 
-1. **下载** 最新 [Releases](https://github.com/Allen-xxa/ComfyNexus/releases) 压缩包
+1. **下载** 最新 [Releases](https://github.com/qiqStrong/ComfyNexus/releases) 压缩包
 2. **解压** 即可使用（绿色免安装）
 3. **启动** 运行 `ComfyNexus.exe`，首次启动选择你的 ComfyUI 根目录
 

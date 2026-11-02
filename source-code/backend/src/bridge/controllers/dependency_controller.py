@@ -214,7 +214,7 @@ def _get_pypi_mirror_config(mirror_source: str) -> dict:
 class DependencyController:
     """依赖管理控制器"""
     
-    PYTORCH_MAPPING_URL = "https://raw.githubusercontent.com/Allen-xxa/ComfyNexus/refs/heads/main/pytorch_mapping.json"
+    PYTORCH_MAPPING_URL = "https://raw.githubusercontent.com/qiqStrong/ComfyNexus/refs/heads/main/pytorch_mapping.json"
     _pytorch_mapping_cache = None
     _pytorch_mapping_cache_time = None
     _pytorch_mapping_cache_ttl = 86400

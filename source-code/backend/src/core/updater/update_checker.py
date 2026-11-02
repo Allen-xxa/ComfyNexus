@@ -13,7 +13,7 @@ from backend.src.utils.logger import app_logger as logger
 class UpdateChecker:
     """版本检查器"""
     
-    VERSION_JSON_URL = "https://raw.githubusercontent.com/Allen-xxa/ComfyNexus/main/version.json"
+    VERSION_JSON_URL = "https://raw.githubusercontent.com/qiqStrong/ComfyNexus/main/version.json"
     REQUEST_TIMEOUT = 15
     
     def __init__(self, settings_manager=None):
@@ -64,7 +64,7 @@ class UpdateChecker:
         从 dev 文件加载开发配置
         
         支持格式: https://<token>@github.com/<owner>/<repo>
-        例如: https://ghp_xxxx@github.com/Allen-xxa/ComfyNexus_VM
+        例如: https://ghp_xxxx@github.com/qiqStrong/ComfyNexus_VM
         """
         try:
             from backend.src.utils.paths import get_dev_update_source_file

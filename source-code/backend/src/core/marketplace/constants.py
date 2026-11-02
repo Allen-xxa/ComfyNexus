@@ -22,7 +22,7 @@ CUSTOM_NODE_LIST_URL = "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Mana
 NODE_MAP_URL = "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/refs/heads/main/extension-node-map.json"
 
 # ComfyUI 官方 API 数据（由 ComfyNexus 通过 GitHub Action 定期拉取）
-COMFYUI_API_URL = "https://raw.githubusercontent.com/Allen-xxa/ComfyNexus/main/comfyui_api_nodes.json"
+COMFYUI_API_URL = "https://raw.githubusercontent.com/qiqStrong/ComfyNexus/main/comfyui_api_nodes.json"
 
 
 # ============================================================================

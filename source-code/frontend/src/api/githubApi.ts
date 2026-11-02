@@ -13,7 +13,7 @@ const MAX_RELEASES = 3
 
 export async function fetchReleases(): Promise<GitHubRelease[]> {
   const result = await window.pywebview.api.get_github_releases(
-    'Allen-xxa',
+    'qiqStrong',
     'ComfyNexus',
     MAX_RELEASES
   )
@@ -51,4 +51,4 @@ export function formatReleaseDate(dateString: string): string {
   })
 }
 
-export const GITHUB_RELEASES_URL = 'https://github.com/Allen-xxa/ComfyNexus/releases'
+export const GITHUB_RELEASES_URL = 'https://github.com/qiqStrong/ComfyNexus/releases'

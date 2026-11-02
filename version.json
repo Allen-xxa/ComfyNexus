@@ -1,7 +1,7 @@
 {
   "version": "v1.2.6",
   "published_at": "2026-07-28T12:49:30Z",
-  "download_url": "https://github.com/Allen-xxa/ComfyNexus/releases/download/v1.2.6/ComfyNexus-v1.2.6-win64.zip",
+  "download_url": "https://github.com/qiqStrong/ComfyNexus/releases/download/v1.2.6/ComfyNexus-v1.2.6-win64.zip",
   "file_size": 123812429,
   "file_hash": "6ae10a056721662aa41e3b0322baf72ceaee45ada714fd5f3cd29188b4175dcb",
   "release_notes": "# ComfyNexus v1.2.6 更新日志\r\n\r\n**发布日期**：2026-07-07  \r\n**版本类型**：Stable\r\n\r\n---\r\n\r\n## 🐛 问题修复\r\n\r\n- **修复启动时更新检查阻塞主进程** - 自动检查 GitHub 版本更新的网络请求（超时15秒）改为后台异步执行，不再阻塞主线程，国内网络环境下启动更流畅\r\n- **修复首次 HTTPS 请求时卡顿** - 设置 SSL 证书文件路径，避免 PyInstaller 打包后逐字节读取 certifi 的 CA 证书包（约300KB），首次网络请求响应更快\r\n- **修复全屏退出后任务栏无法正常最小化/恢复窗口** - 优化Windows平台窗口样式设置，修复全屏退出后任务栏无法正常最小化/恢复窗口的问题\r\n\r\n## 🎨 界面优化\r\n\r\n- **标题栏停止按钮图标替换，使用Power替代Square**"

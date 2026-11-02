@@ -53,7 +53,7 @@ const isDev = import.meta.env.DEV
 const DEV_UPDATE_INFO: UpdateInfo = {
   currentVersion: 'RC_0.8.0',
   latestVersion: 'RC_0.8.1',
-  downloadUrl: 'https://github.com/Allen-xxa/ComfyNexus/releases/latest',
+  downloadUrl: 'https://github.com/qiqStrong/ComfyNexus/releases/latest',
   releaseNotes: '开发环境模拟更新',
   publishedAt: new Date().toISOString(),
   fileSize: 1024 * 1024 * 50,

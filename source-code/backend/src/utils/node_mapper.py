@@ -23,7 +23,7 @@ from backend.src.utils.logger import app_logger as logger
 
 
 EXTENSION_NODE_MAP_URL = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/extension-node-map.json"
-COMFYREGISTRY_API_URL = "https://raw.githubusercontent.com/Allen-xxa/ComfyNexus/main/comfyui_api_nodes.json"
+COMFYREGISTRY_API_URL = "https://raw.githubusercontent.com/qiqStrong/ComfyNexus/main/comfyui_api_nodes.json"
 CACHE_FILE_NAME = "extension_node_map.json"
 CACHE_DURATION = 24 * 60 * 60
 CACHE_VERSION = 4

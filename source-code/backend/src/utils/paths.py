@@ -263,7 +263,7 @@ def get_dev_update_source_file() -> Path:
     用途：
         用于测试更新功能，文件内容为自定义仓库地址
         格式: https://<token>@github.com/<owner>/<repo>
-        例如: https://ghp_xxxx@github.com/Allen-xxa/ComfyNexus_VM
+        例如: https://ghp_xxxx@github.com/qiqStrong/ComfyNexus_VM
     """
     return get_project_root() / "dev"
 
