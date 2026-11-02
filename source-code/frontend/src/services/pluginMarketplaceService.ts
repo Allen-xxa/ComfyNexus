@@ -230,7 +230,11 @@ class PluginMarketplaceService {
       
       return {
         success: true,
-        plugins: response.plugins || []
+        plugins: response.plugins || [],
+        source: response.source,
+        stale: Boolean(response.stale),
+        cached_at: response.cached_at,
+        warning: response.warning
       }
     } catch (error) {
       return handleError(error, '获取插件列表')
@@ -376,7 +380,12 @@ class PluginMarketplaceService {
       
       return {
         success: true,
-        message: response.message || '刷新成功'
+        message: response.message || '刷新成功',
+        plugins: response.plugins || [],
+        source: response.source,
+        stale: Boolean(response.stale),
+        cached_at: response.cached_at,
+        warning: response.warning
       }
     } catch (error) {
       return handleError(error, '刷新插件列表')

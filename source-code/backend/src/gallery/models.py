@@ -60,6 +60,7 @@ class Asset:
     negative_prompt: Optional[str] = None
     model: Optional[str] = None
     sampler: Optional[str] = None
+    scheduler: Optional[str] = None
     steps: Optional[int] = None
     cfg: Optional[float] = None
     seed: Optional[int] = None
@@ -137,6 +138,7 @@ class Asset:
             negative_prompt=data.get("negativePrompt"),
             model=data.get("model"),
             sampler=data.get("sampler"),
+            scheduler=data.get("scheduler"),
             steps=data.get("steps"),
             cfg=data.get("cfg"),
             seed=data.get("seed"),

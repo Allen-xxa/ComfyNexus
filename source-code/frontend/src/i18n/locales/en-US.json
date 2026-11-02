@@ -1815,7 +1815,31 @@
     "fullPluginIntro": "Full Plugin Introduction",
     "noDescription": "No description",
     "stars": "Stars",
-    "installPlugin": "Install Plugin"
+    "installPlugin": "Install Plugin",
+    "marketplace": {
+      "loadFailed": "Failed to load plugin list",
+      "loadFailedRetry": "Failed to load plugin list, please retry later",
+      "enterGithubUrl": "Please enter GitHub URL",
+      "invalidGithubUrl": "Invalid GitHub URL, must start with https://github.com/",
+      "installFromGithub": "Install directly from GitHub URL",
+      "totalCount": "Total {count} plugins",
+      "pageInfo": "Page {current} / {total}",
+      "installed": "Installed",
+      "disabled": "Disabled",
+      "reinstall": "Reinstall",
+      "visitGithub": "Visit GitHub",
+      "sortDefault": "Default",
+      "sortStars": "Stars",
+      "sortUpdated": "Last Updated",
+      "cacheFresh": "Cached {time}, still valid",
+      "cacheStale": "Showing cached data from {time}, refreshing soon",
+      "refreshingInBackground": "Updating in background…",
+      "refreshFailedKeepCache": "Network failed, local cache kept",
+      "cacheJustNow": "just now",
+      "cacheMinutesAgo": "{count} min ago",
+      "cacheHoursAgo": "{count} h ago",
+      "cacheDaysAgo": "{count} d ago"
+    }
   },
   "pluginMarket": {
     "title": "Plugin Market",
@@ -2173,11 +2197,15 @@
       "cfgLabel": "CFG",
       "seedLabel": "Seed",
       "widthLabel": "Width",
-      "heightLabel": "Height"
+      "heightLabel": "Height",
+      "workflowLabel": "Source workflow",
+      "workflowPlaceholder": "e.g. product3view-2-side_00002_.png",
+      "workflowHint": "Records which workflow produced this recipe"
     },
     "card": {
       "noPrompts": "No prompts",
-      "noPreview": "No preview image"
+      "noPreview": "No preview image",
+      "workflowSource": "Source workflow"
     },
     "preview": {
       "positivePrompt": "Positive Prompt",

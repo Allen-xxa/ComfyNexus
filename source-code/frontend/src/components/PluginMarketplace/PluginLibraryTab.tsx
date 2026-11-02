@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Search, AlertCircle, ChevronLeft, ChevronRight, ExternalLink, Download, Check, Ban } from 'lucide-react'
+import { Loader2, Search, AlertCircle, ChevronLeft, ChevronRight, ExternalLink, Download, Check, Ban, Clock } from 'lucide-react'
 import { VirtualPluginGrid } from './VirtualPluginGrid'
 import { pluginMarketplaceService } from '@/services/pluginMarketplaceService'
 import { Plugin, PluginLibraryTabProps, InstallStatusType } from '@/types/plugin-marketplace'
@@ -27,7 +27,19 @@ interface PluginLibraryTabState {
   selectedPlugin: Plugin | null
 }
 
-export const PluginLibraryTab = forwardRef<{ refresh: () => void }, PluginLibraryTabProps>(({
+/** 缓存状态：用于顶部提示条 */
+interface CacheState {
+  /** 数据是否来自已过期的缓存 */
+  stale: boolean
+  /** 缓存写入时间戳（秒），0 表示没有缓存信息 */
+  cachedAt: number
+  /** 是否正在后台更新 */
+  refreshing: boolean
+  /** 非致命提示 */
+  warning?: string
+}
+
+export const PluginLibraryTab = forwardRef<{ refresh: () => Promise<void>; updateInstallationStatus: () => void }, PluginLibraryTabProps>(({
   autoInstallDeps,
   onInstallStart,
   installingPluginName,
@@ -70,6 +82,63 @@ export const PluginLibraryTab = forwardRef<{ refresh: () => void }, PluginLibrar
     return () => resizeObserver.disconnect()
   }, [state.filteredPlugins.length])
 
+  const [cacheState, setCacheState] = useState<CacheState>({
+    stale: false,
+    cachedAt: 0,
+    refreshing: false
+  })
+
+  /**
+   * 用新数据替换列表，但保留用户当前的搜索词和页码
+   * （后台刷新完成时不应该把用户从第 5 页弹回第 1 页）
+   */
+  const applyPluginsPreservingView = useCallback((plugins: Plugin[]) => {
+    setState(prev => {
+      const keyword = String(prev.searchKeyword || '').trim().toLowerCase()
+      const filtered = keyword
+        ? plugins.filter(plugin => {
+            const name = String(plugin.name || '').toLowerCase()
+            const description = String(plugin.description || '').toLowerCase()
+            return name.includes(keyword) || description.includes(keyword)
+          })
+        : plugins
+      return { ...prev, plugins, filteredPlugins: filtered, isLoading: false }
+    })
+  }, [])
+
+  /**
+   * 后台拉取最新列表
+   *
+   * 拉取失败时后端会保留旧缓存并回传旧数据，所以这里不需要清空界面。
+   */
+  const refreshInBackground = useCallback(async () => {
+    setCacheState(prev => ({ ...prev, refreshing: true, warning: undefined }))
+
+    try {
+      const result = await pluginMarketplaceService.refreshPlugins()
+      const plugins = result.plugins || []
+
+      if (result.success && plugins.length > 0) {
+        applyPluginsPreservingView(plugins)
+        setCacheState({
+          stale: Boolean(result.stale),
+          cachedAt: result.cached_at || 0,
+          refreshing: false,
+          warning: result.warning
+        })
+      } else {
+        setCacheState(prev => ({
+          ...prev,
+          refreshing: false,
+          warning: result.warning || result.error_message || t('plugin.marketplace.refreshFailedKeepCache')
+        }))
+      }
+    } catch (error) {
+      console.error('[PluginLibraryTab] 后台刷新插件列表失败:', error)
+      setCacheState(prev => ({ ...prev, refreshing: false }))
+    }
+  }, [applyPluginsPreservingView, t])
+
   const loadPlugins = useCallback(async (useCache: boolean = true) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
@@ -84,6 +153,17 @@ export const PluginLibraryTab = forwardRef<{ refresh: () => void }, PluginLibrar
           isLoading: false,
           currentPage: 1
         }))
+        setCacheState({
+          stale: Boolean(response.stale),
+          cachedAt: response.cached_at || 0,
+          refreshing: false,
+          warning: response.warning
+        })
+
+        // 缓存已过期：先把旧列表展示出来，再静默拉新数据
+        if (useCache && response.stale) {
+          void refreshInBackground()
+        }
       } else {
         setState(prev => ({
           ...prev,
@@ -98,7 +178,7 @@ export const PluginLibraryTab = forwardRef<{ refresh: () => void }, PluginLibrar
         error: t('plugin.marketplace.loadFailedRetry')
       }))
     }
-  }, [])
+  }, [refreshInBackground, t])
 
   useEffect(() => {
     loadPlugins(true)
@@ -158,9 +238,9 @@ export const PluginLibraryTab = forwardRef<{ refresh: () => void }, PluginLibrar
   }, [])
 
   useImperativeHandle(ref, () => ({
-    refresh: () => loadPlugins(false),
+    refresh: () => refreshInBackground(),
     updateInstallationStatus: () => updateInstallationStatus()
-  }), [loadPlugins, updateInstallationStatus])
+  }), [refreshInBackground, updateInstallationStatus])
 
   const handleSearch = useCallback(() => {
     const keywordStr = String(state.searchKeyword || '').trim().toLowerCase()
@@ -285,6 +365,21 @@ export const PluginLibraryTab = forwardRef<{ refresh: () => void }, PluginLibrar
     } catch { return t('common.unknown') }
   }
 
+  /** 把缓存时间戳转成"3 小时前"这类相对时间 */
+  const formatCacheAge = (timestamp: number): string => {
+    if (!timestamp) return ''
+    const seconds = Math.max(0, Math.floor(Date.now() / 1000 - timestamp))
+    if (seconds < 60) return t('plugin.marketplace.cacheJustNow')
+
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return t('plugin.marketplace.cacheMinutesAgo', { count: minutes })
+
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return t('plugin.marketplace.cacheHoursAgo', { count: hours })
+
+    return t('plugin.marketplace.cacheDaysAgo', { count: Math.floor(hours / 24) })
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="mb-4 shrink-0 space-y-4">
@@ -360,6 +455,26 @@ export const PluginLibraryTab = forwardRef<{ refresh: () => void }, PluginLibrar
           <div className="flex items-center gap-2 rounded-lg border border-danger/20 bg-danger/10 p-3 text-danger">
             <AlertCircle className="size-4" />
             <span className="text-sm">{state.error}</span>
+          </div>
+        )}
+
+        {cacheState.cachedAt > 0 && state.plugins.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 py-2 text-xs text-content-secondary">
+            <Clock className="size-3.5 shrink-0" />
+            <span>
+              {cacheState.stale
+                ? t('plugin.marketplace.cacheStale', { time: formatCacheAge(cacheState.cachedAt) })
+                : t('plugin.marketplace.cacheFresh', { time: formatCacheAge(cacheState.cachedAt) })}
+            </span>
+            {cacheState.refreshing && (
+              <span className="flex items-center gap-1.5 text-primary">
+                <Loader2 className="size-3 animate-spin" />
+                {t('plugin.marketplace.refreshingInBackground')}
+              </span>
+            )}
+            {cacheState.warning && (
+              <span className="text-warning">{cacheState.warning}</span>
+            )}
           </div>
         )}
       </div>

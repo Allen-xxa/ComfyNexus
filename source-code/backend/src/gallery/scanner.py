@@ -455,6 +455,7 @@ class GalleryScanner:
                 negative_prompt=metadata.get("negative_prompt"),
                 model=metadata.get("model"),
                 sampler=metadata.get("sampler"),
+                scheduler=metadata.get("scheduler"),
                 steps=metadata.get("steps"),
                 cfg=metadata.get("cfg"),
                 seed=metadata.get("seed"),
@@ -730,6 +731,8 @@ class GalleryScanner:
                     params["cfg"] = inputs.get("cfg")
                 if "sampler_name" in inputs and params.get("sampler") is None:
                     params["sampler"] = inputs.get("sampler_name")
+                if "scheduler" in inputs and params.get("scheduler") is None:
+                    params["scheduler"] = inputs.get("scheduler")
                 if "seed" in inputs and params.get("seed") is None:
                     seed = inputs.get("seed")
                     if isinstance(seed, (int, float)):
@@ -740,6 +743,26 @@ class GalleryScanner:
                     model_name = inputs.get("ckpt_name") or inputs.get("unet_name")
                     if model_name:
                         params["model"] = model_name
+
+            # ---- 新式采样链（SamplerCustomAdvanced）----
+            elif class_type in ["RandomNoise", "RandomNoiseNode"]:
+                seed = inputs.get("noise_seed")
+                if params.get("seed") is None and isinstance(seed, (int, float)):
+                    params["seed"] = int(seed)
+
+            elif class_type in ["KSamplerSelect", "KSamplerSelectNode"]:
+                if params.get("sampler") is None and inputs.get("sampler_name"):
+                    params["sampler"] = inputs.get("sampler_name")
+
+            elif class_type in ["BasicScheduler", "BasicSchedulerNode"]:
+                if params.get("scheduler") is None and inputs.get("scheduler"):
+                    params["scheduler"] = inputs.get("scheduler")
+                if params.get("steps") is None and isinstance(inputs.get("steps"), (int, float)):
+                    params["steps"] = inputs.get("steps")
+
+            elif class_type in ["CFGGuider", "DualCFGGuider"]:
+                if params.get("cfg") is None and isinstance(inputs.get("cfg"), (int, float)):
+                    params["cfg"] = inputs.get("cfg")
         
         positive_prompt = "\n".join([p for p in positive_prompts if p]) if positive_prompts else None
         negative_prompt = "\n".join([p for p in negative_prompts if p]) if negative_prompts else None
@@ -1390,12 +1413,38 @@ class GalleryScanner:
                         params["cfg"] = widgets_values[3]
                     if params.get("sampler") is None and isinstance(widgets_values[4], str):
                         params["sampler"] = widgets_values[4]
+                    # KSampler 的 widgets_values 布局是
+                    # [seed, control_after_generate, steps, cfg, sampler_name, scheduler, denoise]
+                    if params.get("scheduler") is None and isinstance(widgets_values[5], str):
+                        params["scheduler"] = widgets_values[5]
             
             elif node_type in ["CheckpointLoaderSimple", "CheckpointLoader", "UNETLoader", "CheckpointLoaderNF4"]:
                 if params.get("model") is None and widgets_values:
                     model_name = widgets_values[0] if isinstance(widgets_values[0], str) else None
                     if model_name:
                         params["model"] = model_name
+
+            # ---- 新式采样链（SamplerCustomAdvanced）----
+            # 这类工作流没有 KSampler，参数被拆到几个独立节点上
+            elif node_type in ["RandomNoise", "RandomNoiseNode"]:
+                if params.get("seed") is None and widgets_values and isinstance(widgets_values[0], (int, float)):
+                    params["seed"] = int(widgets_values[0])
+
+            elif node_type in ["KSamplerSelect", "KSamplerSelectNode"]:
+                if params.get("sampler") is None and widgets_values and isinstance(widgets_values[0], str):
+                    params["sampler"] = widgets_values[0]
+
+            elif node_type in ["BasicScheduler", "BasicSchedulerNode"]:
+                # widgets_values = [scheduler, steps, denoise]
+                if len(widgets_values) >= 2:
+                    if params.get("scheduler") is None and isinstance(widgets_values[0], str):
+                        params["scheduler"] = widgets_values[0]
+                    if params.get("steps") is None and isinstance(widgets_values[1], (int, float)):
+                        params["steps"] = widgets_values[1]
+
+            elif node_type in ["CFGGuider", "DualCFGGuider"]:
+                if params.get("cfg") is None and widgets_values and isinstance(widgets_values[0], (int, float)):
+                    params["cfg"] = widgets_values[0]
         
         return params
 

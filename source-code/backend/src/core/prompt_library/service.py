@@ -21,7 +21,16 @@ from backend.src.utils.logger import app_logger as logger
 # 生成参数字段：与资产库(Asset)一一对应，用于复现一次生成
 _INT_PARAM_FIELDS = ('steps', 'seed', 'width', 'height')
 _FLOAT_PARAM_FIELDS = ('cfg', 'duration')
-_STR_PARAM_FIELDS = ('model', 'sampler', 'scheduler', 'asset_type', 'source_asset_id')
+_STR_PARAM_FIELDS = (
+    'model',
+    'sampler',
+    'scheduler',
+    'asset_type',
+    'source_asset_id',
+    # 来源工作流：资产文件名 + 已导出的 JSON 路径（未导出为空）
+    'workflow_name',
+    'workflow_path',
+)
 
 # 合理的取值范围，防止脏数据写入
 _INT_PARAM_LIMITS = {

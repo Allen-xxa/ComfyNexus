@@ -60,28 +60,63 @@ class PluginDataFetcher:
         self._plugin_info_map: Dict[str, Dict] = {}
         marketplace_logger.debug("插件数据获取器已初始化")
     
-    def _get_proxies(self) -> Optional[Dict[str, str]]:
+    def _get_proxy_candidates(self) -> List[Optional[str]]:
+        """
+        获取代理候选列表（应用代理 → 系统代理 → 直连）
+
+        VPN 客户端开启"系统代理"时只写注册表、不设环境变量，
+        requests 默认读不到，必须显式兜底，否则应用内请求全部超时。
+        """
         try:
             if not self._settings_manager:
                 from backend.src.core.settings_manager import SettingsManager
                 self._settings_manager = SettingsManager()
-            result = self._settings_manager.get_settings()
-            if not result.get("success"):
-                return None
-            settings = result.get("settings", {})
-            proxy = settings.get("proxy", {})
-            if not proxy.get("enabled"):
-                return None
-            host = proxy.get("host", "").strip()
-            port = proxy.get("port", "").strip()
-            if not host or not port:
-                return None
-            proxy_url = f"http://{host}:{port}"
-            marketplace_logger.debug(f"[PluginDataFetcher] 使用代理: {proxy_url}")
-            return {"http": proxy_url, "https": proxy_url}
+            from backend.src.utils.proxy_helper import get_proxy_candidates
+            return get_proxy_candidates(self._settings_manager)
         except Exception as e:
-            marketplace_logger.debug(f"[PluginDataFetcher] 获取代理配置失败: {e}")
-            return None
+            marketplace_logger.debug(f"[PluginDataFetcher] 解析代理链路失败: {e}")
+            return [None]
+
+    def _http_get(
+        self,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        timeout: int = REQUEST_TIMEOUT,
+    ) -> requests.Response:
+        """
+        带链路回退的 GET 请求
+
+        依次尝试 应用代理 → 系统代理 → 直连，返回第一个成功（2xx）的响应。
+        全部失败时抛出最后一次的异常。
+        """
+        candidates = self._get_proxy_candidates()
+        last_error: Optional[Exception] = None
+
+        for proxy_url in candidates:
+            proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+            try:
+                response = requests.get(
+                    url,
+                    timeout=timeout,
+                    headers=headers,
+                    proxies=proxies,
+                )
+                response.raise_for_status()
+                if proxy_url:
+                    marketplace_logger.debug(
+                        f"[PluginDataFetcher] 经代理 {proxy_url} 请求成功: {url}"
+                    )
+                return response
+            except Exception as e:
+                last_error = e
+                if proxy_url:
+                    marketplace_logger.warning(
+                        f"[PluginDataFetcher] 经代理 {proxy_url} 请求失败，尝试下一条链路: {e}"
+                    )
+
+        if last_error is None:
+            last_error = RuntimeError(f"没有可用的网络链路: {url}")
+        raise last_error
     
     def _get_github_headers(self) -> Dict[str, str]:
         """
@@ -145,16 +180,8 @@ class PluginDataFetcher:
             headers = self._get_github_headers()
             headers.update(mirror_headers)
             
-            proxies = self._get_proxies()
+            response = self._http_get(url, headers=headers)
             
-            response = requests.get(
-                url,
-                timeout=REQUEST_TIMEOUT,
-                headers=headers,
-                proxies=proxies
-            )
-            
-            response.raise_for_status()
             data = response.json()
             
             if isinstance(data, dict):
@@ -210,16 +237,8 @@ class PluginDataFetcher:
             headers = self._get_github_headers()
             headers.update(mirror_headers)
             
-            proxies = self._get_proxies()
+            response = self._http_get(url, headers=headers)
             
-            response = requests.get(
-                url,
-                timeout=REQUEST_TIMEOUT,
-                headers=headers,
-                proxies=proxies
-            )
-            
-            response.raise_for_status()
             data = response.json()
             
             if isinstance(data, list):
@@ -291,17 +310,7 @@ class PluginDataFetcher:
             headers = self._get_github_headers()
             headers.update(mirror_headers)
             
-            proxies = self._get_proxies()
-            
-            response = requests.get(
-                url,
-                timeout=REQUEST_TIMEOUT,
-                headers=headers,
-                proxies=proxies
-            )
-            
-            # 检查响应状态码
-            response.raise_for_status()
+            response = self._http_get(url, headers=headers)
             
             # 解析 JSON 响应
             data = response.json()
@@ -368,16 +377,8 @@ class PluginDataFetcher:
             headers = self._get_github_headers()
             headers.update(mirror_headers)
             
-            proxies = self._get_proxies()
+            response = self._http_get(url, headers=headers)
             
-            response = requests.get(
-                url,
-                timeout=REQUEST_TIMEOUT,
-                headers=headers,
-                proxies=proxies
-            )
-            
-            response.raise_for_status()
             data = response.json()
             
             if isinstance(data, list):
@@ -993,16 +994,8 @@ class PluginDataFetcher:
         try:
             marketplace_logger.debug(f"正在从 ComfyUI-Manager 获取完整节点映射表: {NODE_MAP_URL}")
             
-            proxies = self._get_proxies()
+            response = self._http_get(NODE_MAP_URL, headers=self._get_github_headers())
             
-            response = requests.get(
-                NODE_MAP_URL,
-                timeout=REQUEST_TIMEOUT,
-                headers=self._get_github_headers(),
-                proxies=proxies
-            )
-            
-            response.raise_for_status()
             data = response.json()
             
             full_node_map = {}

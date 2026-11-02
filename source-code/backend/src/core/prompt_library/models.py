@@ -40,6 +40,8 @@ class Prompt:
         duration: 视频时长（秒），仅视频资产有值
         asset_type: 来源类型 image / video
         source_asset_id: 来源资产ID，用于追溯
+        workflow_name: 来源工作流标识（通常是资产文件名）
+        workflow_path: 已导出的工作流 JSON 路径，未导出时为空
     """
     id: str
     name: str
@@ -66,6 +68,8 @@ class Prompt:
     duration: Optional[float] = None
     asset_type: str = ""
     source_asset_id: str = ""
+    workflow_name: str = ""
+    workflow_path: str = ""
     
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""
@@ -93,6 +97,8 @@ class Prompt:
             'duration': self.duration,
             'asset_type': self.asset_type,
             'source_asset_id': self.source_asset_id,
+            'workflow_name': self.workflow_name,
+            'workflow_path': self.workflow_path,
         }
     
     @classmethod
@@ -122,6 +128,8 @@ class Prompt:
             duration=data.get('duration'),
             asset_type=data.get('asset_type', '') or '',
             source_asset_id=data.get('source_asset_id', '') or '',
+            workflow_name=data.get('workflow_name', '') or '',
+            workflow_path=data.get('workflow_path', '') or '',
         )
 
 

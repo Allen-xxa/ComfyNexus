@@ -29,6 +29,7 @@ from .constants import (
     get_recommended_plugins_file,
     ERROR_ENV_NOT_CONFIGURED,
     ERROR_INVALID_GITHUB_URL,
+    ERROR_NETWORK_FAILED,
     ERROR_PATH_TRAVERSAL,
     SUCCESS_PLUGIN_INSTALLED,
     SUCCESS_CACHE_CLEARED
@@ -76,49 +77,61 @@ class MarketplaceController:
         
         # 初始化各个功能模块（使用私有 Path 对象）
         self.data_fetcher = PluginDataFetcher(self._cache_dir, settings_manager)
-        self.cache_manager = CacheManager(self._cache_dir)
+        self.cache_manager = CacheManager(
+            self._cache_dir,
+            ttl_seconds=self._read_cache_ttl_seconds(),
+        )
         self.install_engine = InstallationEngine()
         self.dependency_checker = DependencyChecker()
         
         logger.info(f"插件市场控制器已初始化，缓存目录: {self._cache_dir}")
     
-    def _get_proxy_config(self) -> Optional[Dict]:
+    def _read_cache_ttl_seconds(self) -> Optional[int]:
         """
-        获取代理配置
+        从设置读取插件市场缓存有效期
         
-        从设置管理器读取代理配置，用于 git 和 pip 命令
+        设置项：cache.marketplaceCacheTtlHours（小时），缺省时回落到常量 CACHE_DURATION。
         
         Returns:
-            dict: 代理配置 {"http_proxy": "...", "https_proxy": "...", "HTTP_PROXY": "...", "HTTPS_PROXY": "..."}
-            None: 如果代理未启用或配置无效
+            秒数，读取失败时返回 None（由 CacheManager 使用默认值）
         """
         try:
-            from ..settings_manager import SettingsManager
-            settings_manager = SettingsManager()
-            result = settings_manager.get_settings()
-            
+            if not self._settings_manager:
+                from ..settings_manager import SettingsManager
+                self._settings_manager = SettingsManager()
+            result = self._settings_manager.get_settings()
             if not result.get("success"):
                 return None
-            
-            settings = result.get("settings", {})
-            proxy = settings.get("proxy", {})
-            
-            # 检查是否启用代理
-            if not proxy.get("enabled"):
+            hours = ((result.get("settings") or {}).get("cache") or {}).get(
+                "marketplaceCacheTtlHours"
+            )
+            if isinstance(hours, (int, float)) and not isinstance(hours, bool) and hours > 0:
+                return int(hours * 3600)
+        except Exception as e:
+            logger.debug(f"[MarketplaceController] 读取缓存有效期失败: {e}")
+        return None
+    
+    def _get_proxy_config(self) -> Optional[Dict]:
+        """
+        获取代理配置（供 git / pip 子进程使用）
+
+        应用内未配置代理时会回退到系统代理，这样开了 VPN 的用户
+        装插件、拉依赖也能走代理，而不是直连超时。
+
+        Returns:
+            dict: {"http_proxy": ..., "https_proxy": ..., "HTTP_PROXY": ..., "HTTPS_PROXY": ...}
+            None: 没有可用代理
+        """
+        try:
+            from backend.src.utils.proxy_helper import get_proxy_candidates
+            candidates = get_proxy_candidates(self._settings_manager)
+            proxy_url = next((url for url in candidates if url), None)
+
+            if not proxy_url:
                 return None
-            
-            host = proxy.get("host", "").strip()
-            port = proxy.get("port", "").strip()
-            
-            if not host or not port:
-                logger.warning("[MarketplaceController] 代理配置不完整")
-                return None
-            
-            # 构建代理 URL
-            proxy_url = f"http://{host}:{port}"
-            
+
             logger.info(f"[MarketplaceController] 使用代理: {proxy_url}")
-            
+
             return {
                 "http_proxy": proxy_url,
                 "https_proxy": proxy_url,
@@ -130,21 +143,13 @@ class MarketplaceController:
             return None
     
     def _get_requests_proxies(self) -> Optional[Dict]:
+        """requests 用的 proxies 参数，解析顺序见 utils.proxy_helper"""
         try:
-            from ..settings_manager import SettingsManager
-            settings_manager = SettingsManager()
-            result = settings_manager.get_settings()
-            if not result.get("success"):
+            from backend.src.utils.proxy_helper import get_proxy_candidates
+            candidates = get_proxy_candidates(self._settings_manager)
+            proxy_url = next((url for url in candidates if url), None)
+            if not proxy_url:
                 return None
-            settings = result.get("settings", {})
-            proxy = settings.get("proxy", {})
-            if not proxy.get("enabled"):
-                return None
-            host = proxy.get("host", "").strip()
-            port = proxy.get("port", "").strip()
-            if not host or not port:
-                return None
-            proxy_url = f"http://{host}:{port}"
             return {"http": proxy_url, "https": proxy_url}
         except Exception:
             return None
@@ -226,19 +231,19 @@ class MarketplaceController:
         
         return False, 'not_installed'
     
-    def get_plugins(self, use_cache: bool = True) -> Dict:
+    def get_plugins(self, use_cache: bool = True, allow_stale: bool = True) -> Dict:
         """
         获取插件列表
         
-        流程：
-        1. 如果 use_cache=True 且缓存有效，返回缓存数据
-        2. 否则从数据源获取最新数据
-        3. 检查每个插件的安装状态
-        4. 更新缓存
-        5. 返回插件列表
+        流程（缓存优先）：
+        1. use_cache=True 时先读本地缓存，过期了也照样返回（标记 stale=True），
+           由前端先把列表渲染出来，再后台调 refresh_plugins 拉新数据
+        2. 没有缓存才走网络
+        3. 网络失败但有旧缓存时，返回旧缓存而不是空列表
         
         Args:
-            use_cache: 是否使用缓存
+            use_cache: 是否允许读缓存
+            allow_stale: 缓存过期时是否仍然返回（默认 True）
             
         Returns:
             结果字典：
@@ -246,81 +251,87 @@ class MarketplaceController:
                 'success': bool,
                 'plugins': [Plugin.to_dict(), ...],
                 'total': int,
+                'source': 'cache' | 'network',
+                'stale': bool,          # 数据是否来自过期缓存
+                'cached_at': float,     # 缓存写入时间戳（秒）
+                'warning': str (可选),
                 'error': str (如果失败)
             }
         """
         try:
-            logger.info(f"获取插件列表，use_cache={use_cache}")
+            logger.info(f"获取插件列表，use_cache={use_cache}, allow_stale={allow_stale}")
             
-            # 尝试从缓存加载
             plugins_data = None
-            if use_cache:
-                plugins_data = self.cache_manager.get_plugins_cache()
-                if plugins_data:
-                    logger.info(f"从缓存加载插件列表: {len(plugins_data)} 个插件")
+            source = "network"
+            stale = False
+            cached_at = 0.0
             
-            # 如果缓存无效或不使用缓存，从数据源获取
+            # 1. 优先读缓存（含过期缓存）
+            if use_cache:
+                meta = self.cache_manager.get_plugins_cache_meta()
+                if meta.get('exists'):
+                    plugins_data = self.cache_manager.get_plugins_cache(allow_stale=allow_stale)
+                    if plugins_data:
+                        source = "cache"
+                        cached_at = float(meta.get('timestamp') or 0.0)
+                        stale = not meta.get('is_fresh', False)
+                        if stale:
+                            logger.info(
+                                f"使用过期缓存先展示: {len(plugins_data)} 个插件, "
+                                f"已缓存 {meta.get('age_seconds', 0) / 3600:.1f} 小时"
+                            )
+            
+            # 2. 没有缓存才走网络
             if not plugins_data:
                 logger.info("从数据源获取插件列表")
                 # 当不使用缓存时，强制刷新数据获取器的实例缓存
                 plugins_data = self.data_fetcher.fetch_plugins(force_refresh=not use_cache)
                 
                 if not plugins_data:
-                    logger.warning("数据源返回空列表")
+                    # 网络失败：有旧缓存就先用旧缓存，别让用户看空白页
+                    fallback = self.cache_manager.get_plugins_cache(allow_stale=True)
+                    if fallback:
+                        meta = self.cache_manager.get_plugins_cache_meta()
+                        logger.warning("数据源获取失败，回退到本地缓存展示")
+                        self._attach_install_status(fallback)
+                        return {
+                            'success': True,
+                            'plugins': fallback,
+                            'total': len(fallback),
+                            'source': 'cache',
+                            'stale': True,
+                            'cached_at': float(meta.get('timestamp') or 0.0),
+                            'warning': ERROR_NETWORK_FAILED,
+                        }
+                    
+                    logger.error("数据源获取失败，且没有可用缓存")
                     return {
-                        'success': True,
+                        'success': False,
                         'plugins': [],
-                        'total': 0
+                        'total': 0,
+                        'source': 'network',
+                        'stale': False,
+                        'cached_at': 0.0,
+                        'error': ERROR_NETWORK_FAILED,
                     }
                 
                 # 更新缓存
                 self.cache_manager.set_plugins_cache(plugins_data)
+                meta = self.cache_manager.get_plugins_cache_meta()
+                cached_at = float(meta.get('timestamp') or 0.0)
             
-            # 获取当前环境的 custom_nodes 路径（主路径 + 外置路径）
-            current_env = self.env_manager.get_current_environment()
-            custom_nodes_paths = []
+            # 3. 注入安装状态
+            self._attach_install_status(plugins_data)
             
-            if current_env:
-                comfyui_path = Path(current_env.config.general.comfyui_path)
-                custom_nodes_paths = [comfyui_path / "custom_nodes"]
-                # 收集外置 custom_nodes 路径
-                if hasattr(current_env, 'model_path_configs'):
-                    for config in current_env.model_path_configs:
-                        cn_rel = config.paths.get("custom_nodes") or config.paths.get("customNodes")
-                        if cn_rel:
-                            ext_path = Path(config.base_path) / cn_rel
-                            if ext_path.exists() and ext_path not in custom_nodes_paths:
-                                custom_nodes_paths.append(ext_path)
-            
-            # 检查每个插件的安装状态
-            for plugin_dict in plugins_data:
-                if custom_nodes_paths:
-                    # 从仓库 URL 提取插件名称
-                    repo_url = plugin_dict.get('repository', '')
-                    if repo_url:
-                        plugin_name = repo_url.rstrip('/').split('/')[-1]
-                        if plugin_name.endswith('.git'):
-                            plugin_name = plugin_name[:-4]
-                        
-                        is_installed, install_status = self._check_plugin_installed(
-                            plugin_name,
-                            custom_nodes_paths
-                        )
-                        plugin_dict['is_installed'] = is_installed
-                        plugin_dict['install_status'] = install_status
-                    else:
-                        plugin_dict['is_installed'] = False
-                        plugin_dict['install_status'] = 'not_installed'
-                else:
-                    plugin_dict['is_installed'] = False
-                    plugin_dict['install_status'] = 'not_installed'
-            
-            logger.info(f"成功获取插件列表: {len(plugins_data)} 个插件")
+            logger.info(f"成功获取插件列表: {len(plugins_data)} 个插件（来源: {source}）")
             
             return {
                 'success': True,
                 'plugins': plugins_data,
-                'total': len(plugins_data)
+                'total': len(plugins_data),
+                'source': source,
+                'stale': stale,
+                'cached_at': cached_at,
             }
             
         except Exception as e:
@@ -330,9 +341,57 @@ class MarketplaceController:
                 'success': False,
                 'plugins': [],
                 'total': 0,
+                'source': 'network',
+                'stale': False,
+                'cached_at': 0.0,
                 'error': str(e)
             }
 
+    def _attach_install_status(self, plugins_data: List[Dict]) -> None:
+        """
+        为每个插件就地写入 is_installed / install_status
+        
+        Args:
+            plugins_data: 插件字典列表（会被原地修改）
+        """
+        # 获取当前环境的 custom_nodes 路径（主路径 + 外置路径）
+        current_env = self.env_manager.get_current_environment()
+        custom_nodes_paths = []
+        
+        if current_env:
+            comfyui_path = Path(current_env.config.general.comfyui_path)
+            custom_nodes_paths = [comfyui_path / "custom_nodes"]
+            # 收集外置 custom_nodes 路径
+            if hasattr(current_env, 'model_path_configs'):
+                for config in current_env.model_path_configs:
+                    cn_rel = config.paths.get("custom_nodes") or config.paths.get("customNodes")
+                    if cn_rel:
+                        ext_path = Path(config.base_path) / cn_rel
+                        if ext_path.exists() and ext_path not in custom_nodes_paths:
+                            custom_nodes_paths.append(ext_path)
+        
+        for plugin_dict in plugins_data:
+            if custom_nodes_paths:
+                # 从仓库 URL 提取插件名称
+                repo_url = plugin_dict.get('repository', '')
+                if repo_url:
+                    plugin_name = repo_url.rstrip('/').split('/')[-1]
+                    if plugin_name.endswith('.git'):
+                        plugin_name = plugin_name[:-4]
+                    
+                    is_installed, install_status = self._check_plugin_installed(
+                        plugin_name,
+                        custom_nodes_paths
+                    )
+                    plugin_dict['is_installed'] = is_installed
+                    plugin_dict['install_status'] = install_status
+                else:
+                    plugin_dict['is_installed'] = False
+                    plugin_dict['install_status'] = 'not_installed'
+            else:
+                plugin_dict['is_installed'] = False
+                plugin_dict['install_status'] = 'not_installed'
+    
     def _parse_recommended_config(self) -> List[Dict]:
         """
         解析推荐插件配置文件
@@ -667,36 +726,50 @@ class MarketplaceController:
 
     def refresh_plugins(self) -> Dict:
         """
-        刷新插件列表
+        刷新插件列表（后台拉取最新数据）
         
-        清除所有缓存并重新获取最新数据
+        注意：先拉数据、成功后再覆盖缓存。旧实现是先清缓存再拉，
+        网络一失败本地数据就没了，用户只能看到空列表。
         
         Returns:
-            结果字典：
-            {
-                'success': bool,
-                'message': str,
-                'plugins': [Plugin.to_dict(), ...],
-                'total': int,
-                'error': str (如果失败)
-            }
+            结果字典，结构同 get_plugins，另加 message
         """
         try:
-            logger.info("刷新插件列表，清除缓存")
+            logger.info("刷新插件列表，拉取最新数据")
             
-            # 清除所有缓存
-            self.cache_manager.clear_cache()
+            fresh = self.data_fetcher.fetch_plugins(force_refresh=True)
             
-            # 重新获取插件列表（不使用缓存）
-            result = self.get_plugins(use_cache=False)
+            if not fresh:
+                # 拉取失败：保留旧缓存，把旧数据返回给前端
+                meta = self.cache_manager.get_plugins_cache_meta()
+                fallback = self.cache_manager.get_plugins_cache(allow_stale=True) or []
+                logger.warning("刷新失败，保留本地缓存")
+                self._attach_install_status(fallback)
+                return {
+                    'success': True,
+                    'plugins': fallback,
+                    'total': len(fallback),
+                    'source': 'cache',
+                    'stale': True,
+                    'cached_at': float(meta.get('timestamp') or 0.0),
+                    'warning': ERROR_NETWORK_FAILED,
+                    'message': ERROR_NETWORK_FAILED,
+                }
             
-            if result['success']:
-                result['message'] = SUCCESS_CACHE_CLEARED
-                logger.info(f"插件列表刷新成功: {result['total']} 个插件")
-            else:
-                logger.error("插件列表刷新失败")
+            self.cache_manager.set_plugins_cache(fresh)
+            meta = self.cache_manager.get_plugins_cache_meta()
+            self._attach_install_status(fresh)
             
-            return result
+            logger.info(f"插件列表刷新成功: {len(fresh)} 个插件")
+            return {
+                'success': True,
+                'plugins': fresh,
+                'total': len(fresh),
+                'source': 'network',
+                'stale': False,
+                'cached_at': float(meta.get('timestamp') or 0.0),
+                'message': SUCCESS_CACHE_CLEARED,
+            }
             
         except Exception as e:
             logger.error(f"刷新插件列表失败: {e}")
@@ -705,6 +778,9 @@ class MarketplaceController:
                 'success': False,
                 'plugins': [],
                 'total': 0,
+                'source': 'network',
+                'stale': False,
+                'cached_at': 0.0,
                 'error': str(e)
             }
 

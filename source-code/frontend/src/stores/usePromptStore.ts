@@ -27,6 +27,10 @@ export interface PromptParams {
   duration: number | null
   assetType: string
   sourceAssetId: string
+  /** 来源工作流（资产文件名） */
+  workflowName: string
+  /** 已导出的工作流 JSON 路径 */
+  workflowPath: string
 }
 
 export const EMPTY_PROMPT_PARAMS: PromptParams = {
@@ -40,7 +44,9 @@ export const EMPTY_PROMPT_PARAMS: PromptParams = {
   height: null,
   duration: null,
   assetType: '',
-  sourceAssetId: ''
+  sourceAssetId: '',
+  workflowName: '',
+  workflowPath: ''
 }
 
 /**
@@ -102,6 +108,8 @@ interface PromptResponse {
   duration?: number | null
   asset_type?: string
   source_asset_id?: string
+  workflow_name?: string
+  workflow_path?: string
 }
 
 /**
@@ -255,7 +263,9 @@ const transformPrompt = (backendPrompt: PromptResponse): Prompt => ({
     height: backendPrompt.height ?? null,
     duration: backendPrompt.duration ?? null,
     assetType: backendPrompt.asset_type || '',
-    sourceAssetId: backendPrompt.source_asset_id || ''
+    sourceAssetId: backendPrompt.source_asset_id || '',
+    workflowName: backendPrompt.workflow_name || '',
+    workflowPath: backendPrompt.workflow_path || ''
   }
 })
 
@@ -273,7 +283,9 @@ export const toBackendParams = (params: PromptParams) => ({
   height: params.height,
   duration: params.duration,
   asset_type: params.assetType,
-  source_asset_id: params.sourceAssetId
+  source_asset_id: params.sourceAssetId,
+  workflow_name: params.workflowName,
+  workflow_path: params.workflowPath
 })
 
 /**

@@ -144,7 +144,7 @@ class MarketplaceControllerBridge:
     
     def refresh_plugins(self) -> Dict:
         """
-        刷新插件列表（清除缓存）
+        刷新插件列表（拉取最新数据，失败时保留本地缓存）
         
         Returns:
             dict: {
@@ -152,6 +152,10 @@ class MarketplaceControllerBridge:
                 'message': str,
                 'plugins': [Plugin.to_dict(), ...],
                 'total': int,
+                'source': 'cache' | 'network',
+                'stale': bool,
+                'cached_at': float,
+                'warning': str (可选),
                 'error': str (如果失败)
             }
         """

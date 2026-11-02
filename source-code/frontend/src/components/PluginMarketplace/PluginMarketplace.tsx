@@ -48,7 +48,7 @@ export const PluginMarketplace: React.FC = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false)
 
   const pluginLibraryTabRef = useRef<{ 
-    refresh: () => void
+    refresh: () => Promise<void>
     updateInstallationStatus: () => void
   } | null>(null)
 
@@ -59,16 +59,15 @@ export const PluginMarketplace: React.FC = () => {
     }))
   }, [systemSettings.autoInstallDeps])
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setState(prev => ({ ...prev, isRefreshing: true }))
     
-    if (pluginLibraryTabRef.current) {
-      pluginLibraryTabRef.current.refresh()
-    }
-    
-    setTimeout(() => {
+    try {
+      // 手动刷新走真实网络请求，完成后才收起转圈
+      await pluginLibraryTabRef.current?.refresh()
+    } finally {
       setState(prev => ({ ...prev, isRefreshing: false }))
-    }, 500)
+    }
   }, [])
 
   const handleSortCycle = useCallback(() => {

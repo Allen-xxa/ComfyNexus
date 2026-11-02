@@ -538,6 +538,21 @@ class GalleryController:
 
             # 8. 创建提示词
             try:
+                # 生成参数：决定这条配方能否被复现
+                # 资产上已有的优先；历史资产（扫描时还没解析 scheduler 等）从内嵌工作流兜底
+                params = {
+                    "model": asset.model or "",
+                    "sampler": asset.sampler or "",
+                    "scheduler": asset.scheduler or "",
+                    "steps": asset.steps,
+                    "cfg": asset.cfg,
+                    "seed": asset.seed,
+                    "width": asset.width,
+                    "height": asset.height,
+                    "duration": asset.duration,
+                }
+                params = self._fill_params_from_workflow(asset, params)
+
                 new_prompt = prompt_service.create_prompt({
                     "name": prompt_name,
                     "positive_prompt": positive_prompt,
@@ -546,17 +561,12 @@ class GalleryController:
                     "preview_image": preview_image_path,
                     "remark": "从资产库导入",
                     "tags": list(asset.tags or []),
-                    # 生成参数：决定这条配方能否被复现
-                    "model": asset.model or "",
-                    "sampler": asset.sampler or "",
-                    "steps": asset.steps,
-                    "cfg": asset.cfg,
-                    "seed": asset.seed,
-                    "width": asset.width,
-                    "height": asset.height,
-                    "duration": asset.duration,
+                    **params,
                     "asset_type": asset.asset_type or "",
                     "source_asset_id": asset.id,
+                    # 工作流是嵌在图片里的，这里记录它来自哪个文件，方便回溯
+                    "workflow_name": asset.filename if asset.has_workflow else "",
+                    "workflow_path": "",
                 }, allow_empty_positive=True)
                 logger.info(f"[GalleryController] 导出到提示词库成功: {prompt_name}")
                 return {"success": True, "prompt": new_prompt}
@@ -567,6 +577,53 @@ class GalleryController:
         except Exception as e:
             logger.error(f"[GalleryController] 导出到提示词库异常: {e}")
             return {"success": False, "error_message": str(e)}
+
+    def _fill_params_from_workflow(self, asset: Asset, params: dict) -> dict:
+        """
+        用资产内嵌的工作流补全缺失的生成参数
+
+        扫描时已经尝试解析过一遍，但历史资产可能是在解析逻辑支持 scheduler
+        之前入库的，字段会是空的。导入提示词时再读一次工作流，尽量让
+        模型 / 采样器 / 调度器跟着配方一起走。
+
+        Args:
+            asset: 资产对象
+            params: 已从资产字段填好的参数字典
+
+        Returns:
+            补全后的参数字典
+        """
+        missing = [k for k in ('model', 'sampler', 'scheduler', 'steps', 'cfg', 'seed')
+                   if params.get(k) in (None, "")]
+        if not missing or not asset.has_workflow:
+            return params
+
+        try:
+            file_path = Path(asset.file_path)
+            if not file_path.exists() or file_path.suffix.lower() != ".png":
+                return params
+
+            from PIL import Image
+            with Image.open(file_path) as img:
+                workflow_str = img.info.get("workflow")
+            if not workflow_str:
+                return params
+
+            _, _, extracted = gallery_scanner._extract_prompt_from_workflow(
+                json.loads(workflow_str)
+            )
+            for key in missing:
+                value = (extracted or {}).get(key)
+                if value not in (None, ""):
+                    params[key] = value
+
+            filled = [k for k in missing if params.get(k) not in (None, "")]
+            if filled:
+                logger.info(f"[GalleryController] 从工作流补全参数 {asset.id}: {filled}")
+        except Exception as e:
+            logger.warning(f"[GalleryController] 从工作流补全参数失败 {asset.id}: {e}")
+
+        return params
 
     def _ensure_uncategorized_category(self, prompt_service: PromptLibraryService) -> str:
         """

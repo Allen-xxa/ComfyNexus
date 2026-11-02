@@ -288,6 +288,14 @@ export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function P
                   VIDEO
                 </span>
               )}
+              {params?.workflowName && (
+                <span
+                  className="max-w-[8rem] truncate rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                  title={`${t('prompt.card.workflowSource')}: ${params.workflowName}`}
+                >
+                  ⚙ {params.workflowName}
+                </span>
+              )}
               {chips.map((chip) => (
                 <span key={chip} className="rounded bg-muted px-1.5 py-0.5">
                   {chip}

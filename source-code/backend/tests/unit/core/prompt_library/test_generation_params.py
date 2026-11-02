@@ -15,6 +15,7 @@ from backend.src.core.prompt_library.service import (
 PARAM_FIELDS = {
     'model', 'sampler', 'scheduler', 'steps', 'cfg', 'seed',
     'width', 'height', 'duration', 'asset_type', 'source_asset_id',
+    'workflow_name', 'workflow_path',
 }
 
 
@@ -37,6 +38,8 @@ class TestExtractGenerationParams:
             'duration': None,
             'asset_type': 'image',
             'source_asset_id': 'asset-1',
+            'workflow_name': 'product3view-2-side_00002_.png',
+            'workflow_path': '',
         }
 
         params = _extract_generation_params(data)

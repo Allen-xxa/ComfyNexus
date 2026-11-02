@@ -419,6 +419,30 @@ export function PromptEditorDialog({
                 />
               </div>
             </div>
+
+            <div className="mt-3 space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <Label htmlFor="param-workflow">{t('prompt.editor.workflowLabel')}</Label>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {t('prompt.editor.workflowHint')}
+                </span>
+              </div>
+              <Input
+                id="param-workflow"
+                value={formData.params.workflowName}
+                onChange={(e) => updateParam('workflowName', e.target.value)}
+                placeholder={t('prompt.editor.workflowPlaceholder')}
+                className="font-mono text-xs"
+              />
+              {formData.params.workflowPath && (
+                <p
+                  className="truncate font-mono text-[10px] text-muted-foreground"
+                  title={formData.params.workflowPath}
+                >
+                  {formData.params.workflowPath}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

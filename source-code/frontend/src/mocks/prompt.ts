@@ -114,7 +114,9 @@ export const mockPrompts: Prompt[] = [
       height: 1536,
       duration: null,
       assetType: 'image',
-      sourceAssetId: ''
+      sourceAssetId: '',
+      workflowName: '',
+      workflowPath: ''
     }
   },
   {
@@ -140,7 +142,9 @@ export const mockPrompts: Prompt[] = [
       height: 1152,
       duration: null,
       assetType: 'image',
-      sourceAssetId: ''
+      sourceAssetId: '',
+      workflowName: '',
+      workflowPath: ''
     }
   },
   {
@@ -166,7 +170,9 @@ export const mockPrompts: Prompt[] = [
       height: 768,
       duration: null,
       assetType: 'image',
-      sourceAssetId: ''
+      sourceAssetId: '',
+      workflowName: '',
+      workflowPath: ''
     }
   },
   {
@@ -192,7 +198,9 @@ export const mockPrompts: Prompt[] = [
       height: 1216,
       duration: null,
       assetType: 'image',
-      sourceAssetId: ''
+      sourceAssetId: '',
+      workflowName: '',
+      workflowPath: ''
     }
   }
 ]

@@ -31,33 +31,54 @@ class CacheManager:
     缓存文件使用 JSON 格式存储，包含数据和元数据（时间戳）。
     """
     
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Optional[Path] = None, ttl_seconds: Optional[int] = None):
         """
         初始化缓存管理器
         
         Args:
             cache_dir: 缓存目录路径，如果为 None 则使用默认路径
+            ttl_seconds: 缓存有效期（秒），None 时使用默认值
         """
         # 使用私有属性存储 Path 对象，避免 pywebview 序列化错误
         self._cache_dir = cache_dir or get_cache_dir()
         self._plugins_cache_file = self._cache_dir / PLUGINS_CACHE_FILE
         self._recommended_cache_file = self._cache_dir / RECOMMENDED_CACHE_FILE
+        self._ttl = ttl_seconds if ttl_seconds and ttl_seconds > 0 else CACHE_DURATION
         
         # 确保缓存目录存在
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         
-        marketplace_logger.debug(f"缓存管理器已初始化，缓存目录: {self._cache_dir}")
+        marketplace_logger.debug(f"缓存管理器已初始化，缓存目录: {self._cache_dir}, TTL: {self._ttl}s")
     
-    def get_plugins_cache(self) -> Optional[List[Dict]]:
+    def get_plugins_cache(self, allow_stale: bool = False) -> Optional[List[Dict]]:
         """
         获取插件列表缓存
         
-        如果缓存有效，返回缓存的插件列表；否则返回 None。
+        Args:
+            allow_stale: True 时忽略有效期，只要文件可解析就返回。
+                用于"先把历史缓存渲染出来，再后台拉新数据"的场景——
+                插件更新以天为单位，过期几小时的列表依然可用，
+                总比让用户对着空白页等网络超时好。
         
         Returns:
-            插件列表（字典列表）或 None（缓存无效或不存在）
+            插件列表（字典列表）或 None（缓存不可用）
         """
-        return self._read_cache(self._plugins_cache_file, "插件列表")
+        return self._read_cache(self._plugins_cache_file, "插件列表", allow_stale=allow_stale)
+    
+    def get_plugins_cache_meta(self) -> Dict:
+        """
+        获取插件列表缓存的元信息（不加载完整数据）
+        
+        Returns:
+            {
+                'exists': bool,        # 缓存文件是否存在
+                'timestamp': float,    # 写入时间戳，不存在时为 0
+                'age_seconds': float,  # 距今多少秒
+                'is_fresh': bool,      # 是否在有效期内
+                'count': int,          # 条目数，读不出来时为 0
+            }
+        """
+        return self._read_cache_meta(self._plugins_cache_file)
     
     def set_plugins_cache(self, plugins: List[Dict]) -> None:
         """
@@ -70,16 +91,17 @@ class CacheManager:
         """
         self._write_cache(self._plugins_cache_file, plugins, "插件列表")
     
-    def get_recommended_cache(self) -> Optional[List[Dict]]:
+    def get_recommended_cache(self, allow_stale: bool = False) -> Optional[List[Dict]]:
         """
         获取推荐列表缓存
         
-        如果缓存有效，返回缓存的推荐插件列表；否则返回 None。
+        Args:
+            allow_stale: True 时忽略有效期
         
         Returns:
-            推荐插件列表（字典列表）或 None（缓存无效或不存在）
+            推荐插件列表（字典列表）或 None
         """
-        return self._read_cache(self._recommended_cache_file, "推荐列表")
+        return self._read_cache(self._recommended_cache_file, "推荐列表", allow_stale=allow_stale)
     
     def set_recommended_cache(self, plugins: List[Dict]) -> None:
         """
@@ -120,7 +142,7 @@ class CacheManager:
         
         缓存有效的条件：
         1. 文件存在
-        2. 文件修改时间在有效期内（24 小时）
+        2. 文件修改时间在有效期内（默认 24 小时，可由设置覆盖）
         3. 文件内容可以正确解析为 JSON
         
         Args:
@@ -139,11 +161,11 @@ class CacheManager:
             mtime = cache_file.stat().st_mtime
             age = time.time() - mtime
             
-            if age > CACHE_DURATION:
+            if age > self._ttl:
                 marketplace_logger.debug(
                     f"缓存已过期: {cache_file}, "
                     f"年龄: {age:.0f}秒, "
-                    f"有效期: {CACHE_DURATION}秒"
+                    f"有效期: {self._ttl}秒"
                 )
                 return False
             
@@ -174,18 +196,64 @@ class CacheManager:
             marketplace_logger.error(f"检查缓存有效性时发生错误: {cache_file}, 错误: {e}")
             return False
     
-    def _read_cache(self, cache_file: Path, cache_name: str) -> Optional[List[Dict]]:
+    def _read_cache_meta(self, cache_file: Path) -> Dict:
+        """
+        读取缓存元信息（只解析顶层，用于判断是否新鲜）
+        
+        Args:
+            cache_file: 缓存文件路径
+            
+        Returns:
+            {'exists', 'timestamp', 'age_seconds', 'is_fresh', 'count'}
+        """
+        meta = {
+            'exists': cache_file.exists(),
+            'timestamp': 0.0,
+            'age_seconds': 0.0,
+            'is_fresh': False,
+            'count': 0,
+        }
+        if not meta['exists']:
+            return meta
+
+        try:
+            mtime = cache_file.stat().st_mtime
+            meta['timestamp'] = mtime
+            meta['age_seconds'] = max(0.0, time.time() - mtime)
+            meta['is_fresh'] = meta['age_seconds'] <= self._ttl
+
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                meta['timestamp'] = float(data.get('timestamp') or mtime)
+                payload = data.get('data')
+                if isinstance(payload, list):
+                    meta['count'] = len(payload)
+        except Exception as e:
+            marketplace_logger.warning(f"读取缓存元信息失败: {cache_file}, 错误: {e}")
+
+        return meta
+
+    def _read_cache(
+        self,
+        cache_file: Path,
+        cache_name: str,
+        allow_stale: bool = False,
+    ) -> Optional[List[Dict]]:
         """
         读取缓存文件
         
         Args:
             cache_file: 缓存文件路径
             cache_name: 缓存名称（用于日志）
+            allow_stale: True 时跳过有效期检查，只要结构合法就返回
             
         Returns:
             缓存数据（字典列表）或 None
         """
-        if not self._is_cache_valid(cache_file):
+        if not allow_stale and not self._is_cache_valid(cache_file):
+            return None
+        if allow_stale and not cache_file.exists():
             return None
         
         try:
@@ -195,9 +263,13 @@ class CacheManager:
             data = cache_data['data']
             timestamp = cache_data['timestamp']
             
+            age = max(0.0, time.time() - float(timestamp))
+            expired_note = "（已过期，先展示）" if age > self._ttl else ""
+            
             marketplace_logger.info(
                 f"从缓存加载{cache_name}: {len(data)} 项, "
                 f"缓存时间: {datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')}"
+                f"{expired_note}"
             )
             
             return data

@@ -138,6 +138,14 @@ export interface BaseResponse {
  */
 export interface PluginListResponse extends BaseResponse {
   plugins?: Plugin[]
+  /** 数据来源：本地缓存或网络 */
+  source?: 'cache' | 'network'
+  /** 数据是否来自已过期的缓存（需要后台刷新） */
+  stale?: boolean
+  /** 缓存写入时间戳（秒） */
+  cached_at?: number
+  /** 非致命提示，如"网络获取失败，已展示本地缓存" */
+  warning?: string
 }
 
 /**
@@ -182,6 +190,11 @@ export interface InstallProgressResponse extends BaseResponse {
  */
 export interface RefreshPluginsResponse extends BaseResponse {
   message?: string
+  plugins?: Plugin[]
+  source?: 'cache' | 'network'
+  stale?: boolean
+  cached_at?: number
+  warning?: string
 }
 
 /**

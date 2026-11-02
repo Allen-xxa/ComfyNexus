@@ -1946,7 +1946,15 @@
       "visitGithub": "访问Github",
       "sortDefault": "默认",
       "sortStars": "星标数",
-      "sortUpdated": "最近更新"
+      "sortUpdated": "最近更新",
+      "cacheFresh": "列表缓存于 {time}，已在有效期内",
+      "cacheStale": "正在展示 {time}的缓存，稍后自动更新",
+      "refreshingInBackground": "后台更新中…",
+      "refreshFailedKeepCache": "网络获取失败，已保留本地缓存",
+      "cacheJustNow": "刚刚",
+      "cacheMinutesAgo": "{count} 分钟前",
+      "cacheHoursAgo": "{count} 小时前",
+      "cacheDaysAgo": "{count} 天前"
     }
   },
   "pluginMarket": {
@@ -2290,11 +2298,15 @@
       "cfgLabel": "CFG",
       "seedLabel": "种子",
       "widthLabel": "宽度",
-      "heightLabel": "高度"
+      "heightLabel": "高度",
+      "workflowLabel": "来源工作流",
+      "workflowPlaceholder": "例如 product3view-2-side_00002_.png",
+      "workflowHint": "记录这条配方由哪个工作流产出，方便回溯"
     },
     "card": {
       "noPrompts": "暂无提示词",
-      "noPreview": "暂无预览图"
+      "noPreview": "暂无预览图",
+      "workflowSource": "来源工作流"
     },
     "preview": {
       "positivePrompt": "正向提示词",

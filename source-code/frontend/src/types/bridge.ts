@@ -63,6 +63,10 @@ export interface PromptParamsPayload {
   duration?: number | null
   asset_type?: string
   source_asset_id?: string
+  /** 来源工作流（资产文件名） */
+  workflow_name?: string
+  /** 已导出的工作流 JSON 路径 */
+  workflow_path?: string
 }
 
 export interface PyWebViewAPI {
@@ -1085,6 +1089,8 @@ export interface PyWebViewAPI {
       duration?: number | null
       asset_type?: string
       source_asset_id?: string
+      workflow_name?: string
+      workflow_path?: string
     }
     error_message?: string
   }>;
