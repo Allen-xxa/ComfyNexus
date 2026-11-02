@@ -59,7 +59,7 @@ export function ModuleManagement() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {['home', 'system-settings', 'about', 'feedback'].includes(module.id) && (
+          {['home', 'system-settings', 'about'].includes(module.id) && (
             <span className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 rounded px-2 py-1 text-xs">
               {t('dependency.core')}
             </span>
@@ -67,7 +67,7 @@ export function ModuleManagement() {
           <Switch
             checked={isEnabled}
             onCheckedChange={() => handleToggleModule(moduleId)}
-            disabled={['home', 'system-settings', 'about', 'feedback'].includes(moduleId)}
+            disabled={['home', 'system-settings', 'about'].includes(moduleId)}
           />
         </div>
       </div>

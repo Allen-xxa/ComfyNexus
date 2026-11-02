@@ -24,7 +24,6 @@ const MonitorCenterPage = lazy(() => import('@/pages/MonitorCenterPage'))
 const EnvManagePage = lazy(() => import('@/pages/EnvManagePage'))
 const SystemSettingsPage = lazy(() => import('@/pages/SystemSettingsPage'))
 const AboutPage = lazy(() => import('@/pages/AboutPage'))
-const FeedbackPage = lazy(() => import('@/pages/FeedbackPage'))
 
 /**
  * 路由配置
@@ -97,10 +96,6 @@ export const router = createBrowserRouter([
       {
         path: 'about',
         element: <AboutPage />,
-      },
-      {
-        path: 'feedback',
-        element: <FeedbackPage />,
       },
       {
         path: '*',

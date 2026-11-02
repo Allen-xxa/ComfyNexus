@@ -18,6 +18,85 @@ from backend.src.utils.paths import get_prompt_data_dir, get_prompt_images_dir
 from backend.src.utils.logger import app_logger as logger
 
 
+# 生成参数字段：与资产库(Asset)一一对应，用于复现一次生成
+_INT_PARAM_FIELDS = ('steps', 'seed', 'width', 'height')
+_FLOAT_PARAM_FIELDS = ('cfg', 'duration')
+_STR_PARAM_FIELDS = ('model', 'sampler', 'scheduler', 'asset_type', 'source_asset_id')
+
+# 合理的取值范围，防止脏数据写入
+_INT_PARAM_LIMITS = {
+    'steps': (1, 10000),
+    'seed': (0, 2 ** 63 - 1),
+    'width': (1, 32768),
+    'height': (1, 32768),
+}
+_FLOAT_PARAM_LIMITS = {
+    'cfg': (0.0, 100.0),
+    'duration': (0.0, 86400.0),
+}
+
+
+def _extract_generation_params(data: Dict[str, Any]) -> Dict[str, Any]:
+    """从请求数据里取出生成参数，只保留出现过的字段。
+
+    None 与空字符串视为"清空"，会被写成默认值（数值为 None，字符串为 ""）。
+    数值超出合理范围时直接丢弃，避免脏数据污染库。
+    """
+    params: Dict[str, Any] = {}
+
+    for field in _STR_PARAM_FIELDS:
+        if field in data:
+            value = data[field]
+            params[field] = (str(value).strip() if value is not None else "")
+
+    for field in _INT_PARAM_FIELDS:
+        if field not in data:
+            continue
+        value = data[field]
+        if value is None or value == "":
+            params[field] = None
+            continue
+        if isinstance(value, bool):
+            raise ValueError(f"参数 {field} 必须是数字")
+        if isinstance(value, int):
+            # 直接取整，避免 float 转换丢失 int64 精度（如随机种子）
+            number = value
+        else:
+            try:
+                number = int(value)
+            except (TypeError, ValueError):
+                try:
+                    number = int(float(value))
+                except (TypeError, ValueError):
+                    raise ValueError(f"参数 {field} 必须是数字")
+        low, high = _INT_PARAM_LIMITS[field]
+        params[field] = number if low <= number <= high else None
+
+    for field in _FLOAT_PARAM_FIELDS:
+        if field not in data:
+            continue
+        value = data[field]
+        if value is None or value == "":
+            params[field] = None
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"参数 {field} 必须是数字")
+        low, high = _FLOAT_PARAM_LIMITS[field]
+        params[field] = round(number, 4) if low <= number <= high else None
+
+    return params
+
+
+def _default_generation_params() -> Dict[str, Any]:
+    """生成参数字段的默认值，用于旧数据补齐"""
+    params: Dict[str, Any] = {field: "" for field in _STR_PARAM_FIELDS}
+    params.update({field: None for field in _INT_PARAM_FIELDS})
+    params.update({field: None for field in _FLOAT_PARAM_FIELDS})
+    return params
+
+
 class PromptLibraryService:
     """
     提示词库管理服务
@@ -228,12 +307,15 @@ class PromptLibraryService:
         with self._lock:
             return self._load_prompts()
     
-    def create_prompt(self, data: Dict[str, Any]) -> Dict:
+    def create_prompt(self, data: Dict[str, Any], allow_empty_positive: bool = False) -> Dict:
         """
         创建提示词
         
         Args:
             data: 提示词数据
+            allow_empty_positive: 允许正向提示词为空。
+                仅用于"从资产库导入"场景——资产可能没解析到提示词，
+                但模型/采样器等参数仍有保存价值。
             
         Returns:
             Dict: 新创建的提示词
@@ -251,7 +333,7 @@ class PromptLibraryService:
         if len(name) > 100:
             raise ValueError("提示词名称不能超过100个字符")
         
-        if not positive_prompt:
+        if not positive_prompt and not allow_empty_positive:
             raise ValueError("正向提示词不能为空")
         
         if len(positive_prompt) > 10000:
@@ -281,6 +363,8 @@ class PromptLibraryService:
             if len(tag) > 50:
                 raise ValueError("标签长度不能超过50个字符")
         
+        generation_params = _extract_generation_params(data)
+        
         with self._lock:
             prompts = self._load_prompts()
             
@@ -303,6 +387,8 @@ class PromptLibraryService:
                 'created_at': now,
                 'updated_at': now,
             }
+            new_prompt.update(_default_generation_params())
+            new_prompt.update(generation_params)
             
             prompts.append(new_prompt)
             self._save_prompts(prompts)
@@ -346,9 +432,9 @@ class PromptLibraryService:
                         prompt['name'] = name
                     
                     if 'positive_prompt' in data:
+                        # 更新允许正向提示词为空：从资产库导入的"参数配方"可能
+                        # 没有解析到提示词，用户只想改参数/标签时不应被拦住
                         positive_prompt = data['positive_prompt'].strip()
-                        if not positive_prompt:
-                            raise ValueError("正向提示词不能为空")
                         if len(positive_prompt) > 10000:
                             raise ValueError("正向提示词不能超过10000个字符")
                         prompt['positive_prompt'] = positive_prompt
@@ -388,6 +474,10 @@ class PromptLibraryService:
                             if len(tag) > 50:
                                 raise ValueError("标签长度不能超过50个字符")
                         prompt['tags'] = tags
+                    
+                    generation_params = _extract_generation_params(data)
+                    if generation_params:
+                        prompt.update(generation_params)
                     
                     prompt['updated_at'] = datetime.now().isoformat()
                     break

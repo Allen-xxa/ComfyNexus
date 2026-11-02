@@ -102,7 +102,20 @@ export const mockPrompts: Prompt[] = [
     tags: ['Cyberpunk', '城市', '夜景'],
     createdAt: '2024-01-15T10:00:00Z',
     updatedAt: '2024-01-20T14:30:00Z',
-    isFavorite: true
+    isFavorite: true,
+    params: {
+      model: 'sdxl/sd_xl_base_1.0.safetensors',
+      sampler: 'dpmpp_2m',
+      scheduler: 'karras',
+      steps: 30,
+      cfg: 7,
+      seed: 1234567890,
+      width: 1024,
+      height: 1536,
+      duration: null,
+      assetType: 'image',
+      sourceAssetId: ''
+    }
   },
   {
     id: '2',
@@ -115,7 +128,20 @@ export const mockPrompts: Prompt[] = [
     tags: ['Portrait', '胶片', '人像'],
     createdAt: '2024-01-16T09:00:00Z',
     updatedAt: '2024-01-18T16:20:00Z',
-    isFavorite: false
+    isFavorite: false,
+    params: {
+      model: 'sd15/realisticVision_v60.safetensors',
+      sampler: 'euler_a',
+      scheduler: 'normal',
+      steps: 28,
+      cfg: 6.5,
+      seed: 987654321,
+      width: 768,
+      height: 1152,
+      duration: null,
+      assetType: 'image',
+      sourceAssetId: ''
+    }
   },
   {
     id: '3',
@@ -128,7 +154,20 @@ export const mockPrompts: Prompt[] = [
     tags: ['Flux 专用', '产品', '极简'],
     createdAt: '2024-01-17T11:00:00Z',
     updatedAt: '2024-01-17T11:00:00Z',
-    isFavorite: false
+    isFavorite: false,
+    params: {
+      model: 'flux/flux1-dev.safetensors',
+      sampler: 'euler',
+      scheduler: 'simple',
+      steps: 20,
+      cfg: 1,
+      seed: 42,
+      width: 1344,
+      height: 768,
+      duration: null,
+      assetType: 'image',
+      sourceAssetId: ''
+    }
   },
   {
     id: '4',
@@ -141,6 +180,19 @@ export const mockPrompts: Prompt[] = [
     tags: ['动漫', '角色', '二次元'],
     createdAt: '2024-01-18T14:00:00Z',
     updatedAt: '2024-01-18T14:00:00Z',
-    isFavorite: true
+    isFavorite: true,
+    params: {
+      model: 'illustrious/illustriousXL_v01.safetensors',
+      sampler: 'dpmpp_2m_sde',
+      scheduler: 'karras',
+      steps: 32,
+      cfg: 5.5,
+      seed: 20240118,
+      width: 832,
+      height: 1216,
+      duration: null,
+      assetType: 'image',
+      sourceAssetId: ''
+    }
   }
 ]

@@ -110,7 +110,7 @@ interface AssetStore {
   getWorkflow: (id: string) => Promise<{ success: boolean; workflow?: object }>
   exportWorkflow: (id: string) => Promise<{ success: boolean; workflowPath?: string; workflowName?: string; error_message?: string }>
   exportWorkflowToPath: (id: string, savePath: string) => Promise<{ success: boolean; workflowPath?: string; error_message?: string }>
-  exportToPromptLibrary: (id: string) => Promise<{ success: boolean; error_message?: string; prompt?: unknown }>
+  exportToPromptLibrary: (id: string, force?: boolean) => Promise<{ success: boolean; error_message?: string; prompt?: unknown }>
   setSortBy: (sortBy: SortBy) => void
   setShowFoldersInList: (show: boolean) => void
   getFilteredAssets: () => Asset[]
@@ -1033,13 +1033,13 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     }
   },
 
-  exportToPromptLibrary: async (id) => {
+  exportToPromptLibrary: async (id, force = false) => {
     try {
       if (isDevelopment()) {
         return { success: true }
       }
 
-      const result = await window.pywebview.api.gallery_export_to_prompt_library(id)
+      const result = await window.pywebview.api.gallery_export_to_prompt_library(id, force)
       return result
     } catch (error) {
       console.error('[useAssetStore] 导出到提示词库异常:', error)

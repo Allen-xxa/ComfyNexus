@@ -6785,7 +6785,9 @@ class Api:
         negative_prompt: str = "",
         preview_image: str = "",
         remark: str = "",
-        tags: list = None
+        tags: list = None,
+        params: dict = None,
+        allow_empty_positive: bool = False
     ):
         """
         创建新提示词
@@ -6798,6 +6800,9 @@ class Api:
             preview_image: 预览图路径
             remark: 使用备注
             tags: 标签数组
+            params: 生成参数 dict（model/sampler/scheduler/steps/cfg/seed/
+                width/height/duration/asset_type/source_asset_id）
+            allow_empty_positive: 允许正向提示词为空
             
         Returns:
             dict: {
@@ -6807,7 +6812,8 @@ class Api:
             }
         """
         return self._prompt_library_controller.prompt_create(
-            name, positive_prompt, category_id, negative_prompt, preview_image, remark, tags
+            name, positive_prompt, category_id, negative_prompt, preview_image,
+            remark, tags, params, allow_empty_positive
         )
     
     def prompt_update(
@@ -6819,7 +6825,8 @@ class Api:
         negative_prompt: str = None,
         preview_image: str = None,
         remark: str = None,
-        tags: list = None
+        tags: list = None,
+        params: dict = None
     ):
         """
         更新提示词
@@ -6827,6 +6834,7 @@ class Api:
         Args:
             prompt_id: 提示词ID
             其他参数为可选更新字段
+            params: 生成参数 dict，数值字段传 None 表示清空
             
         Returns:
             dict: {
@@ -6835,7 +6843,8 @@ class Api:
             }
         """
         return self._prompt_library_controller.prompt_update(
-            prompt_id, name, positive_prompt, category_id, negative_prompt, preview_image, remark, tags
+            prompt_id, name, positive_prompt, category_id, negative_prompt,
+            preview_image, remark, tags, params
         )
     
     def prompt_delete(self, prompt_id: str):
@@ -7597,9 +7606,14 @@ class Api:
         """导出工作流到指定路径"""
         return self._gallery_controller.gallery_export_workflow_to_path(asset_id, save_path)
 
-    def gallery_export_to_prompt_library(self, asset_id: str) -> dict:
-        """导出资产到提示词库"""
-        return self._gallery_controller.gallery_export_to_prompt_library(asset_id)
+    def gallery_export_to_prompt_library(self, asset_id: str, force: bool = False) -> dict:
+        """导出资产到提示词库
+
+        Args:
+            asset_id: 资产ID
+            force: 资产未解析到提示词时仍要导入（只保留图片和参数）
+        """
+        return self._gallery_controller.gallery_export_to_prompt_library(asset_id, force)
 
     def gallery_open_location(self, asset_id: str) -> dict:
         """打开文件所在位置"""

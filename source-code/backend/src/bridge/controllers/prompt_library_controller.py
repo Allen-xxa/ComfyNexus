@@ -77,7 +77,9 @@ class PromptLibraryController:
         negative_prompt: str = "",
         preview_image: str = "",
         remark: str = "",
-        tags: List[str] = None
+        tags: List[str] = None,
+        params: Dict[str, Any] = None,
+        allow_empty_positive: bool = False
     ) -> Dict[str, Any]:
         """
         创建新提示词
@@ -90,6 +92,9 @@ class PromptLibraryController:
             preview_image: 预览图路径
             remark: 使用备注
             tags: 标签数组
+            params: 生成参数（model / sampler / scheduler / steps / cfg /
+                seed / width / height / duration / asset_type / source_asset_id）
+            allow_empty_positive: 允许正向提示词为空（从资产库导入时使用）
             
         Returns:
             {
@@ -110,8 +115,12 @@ class PromptLibraryController:
                 "remark": remark,
                 "tags": tags or []
             }
+            if params:
+                data.update(params)
             
-            prompt = self.service.create_prompt(data)
+            prompt = self.service.create_prompt(
+                data, allow_empty_positive=allow_empty_positive
+            )
             
             return {
                 "success": True,
@@ -139,7 +148,8 @@ class PromptLibraryController:
         negative_prompt: str = None,
         preview_image: str = None,
         remark: str = None,
-        tags: List[str] = None
+        tags: List[str] = None,
+        params: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         更新提示词
@@ -147,6 +157,7 @@ class PromptLibraryController:
         Args:
             prompt_id: 提示词ID
             其他参数为可选更新字段
+            params: 生成参数，传 None 的数值字段表示清空
             
         Returns:
             {
@@ -172,6 +183,8 @@ class PromptLibraryController:
                 data["remark"] = remark
             if tags is not None:
                 data["tags"] = tags
+            if params:
+                data.update(params)
             
             success = self.service.update_prompt(prompt_id, data)
             

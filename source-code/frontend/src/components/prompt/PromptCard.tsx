@@ -171,12 +171,23 @@ export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function P
 
   const isVisualDragging = isLocalDragging && isGlobalDragging
 
+  // 参数展示：模型只显示文件名，其余压成短标签
+  const params = prompt.params
+  const modelName = params?.model ? params.model.split(/[\\/]/).pop() || '' : ''
+  const chips: string[] = []
+  if (params?.width && params?.height) chips.push(`${params.width}×${params.height}`)
+  if (params?.steps) chips.push(`${params.steps} 步`)
+  if (params?.cfg != null) chips.push(`CFG ${params.cfg}`)
+  if (params?.sampler) chips.push(params.sampler)
+  if (params?.seed != null) chips.push(`seed ${params.seed}`)
+  const isVideo = params?.assetType === 'video'
+
   return (
     <div
       ref={ref}
       data-prompt-card={prompt.id}
       className={cn(
-        'group flex h-[170px] w-full flex-shrink-0 overflow-hidden rounded-lg border transition-all duration-200 cursor-grab',
+        'group flex h-[188px] w-full flex-shrink-0 overflow-hidden rounded-lg border transition-all duration-200 cursor-grab',
         'bg-card shadow-soft hover:shadow-soft-md hover:-translate-y-1.5',
         'active:cursor-grabbing',
         isSelected
@@ -206,9 +217,9 @@ export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function P
       </div>
 
       <div className="relative flex flex-1 flex-col justify-between p-3.5">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <h3 className="max-w-[140px] truncate text-sm font-semibold text-foreground">
+            <h3 className="max-w-[140px] truncate text-sm font-semibold text-foreground" title={prompt.name}>
               {prompt.name}
             </h3>
 
@@ -261,9 +272,35 @@ export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function P
             )}
           </div>
 
-          <div className="line-clamp-2 rounded-md border border-border-subtle bg-muted p-2 text-xs text-muted-foreground">
-            {prompt.remark}
-          </div>
+          {modelName && (
+            <div
+              className="truncate font-mono text-[11px] text-muted-foreground"
+              title={params.model}
+            >
+              {modelName}
+            </div>
+          )}
+
+          {chips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground/80">
+              {isVideo && (
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                  VIDEO
+                </span>
+              )}
+              {chips.map((chip) => (
+                <span key={chip} className="rounded bg-muted px-1.5 py-0.5">
+                  {chip}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {prompt.remark && (
+            <div className="line-clamp-1 text-[11px] text-muted-foreground/60" title={prompt.remark}>
+              {prompt.remark}
+            </div>
+          )}
         </div>
 
         <div className="mt-3 flex items-center gap-2">

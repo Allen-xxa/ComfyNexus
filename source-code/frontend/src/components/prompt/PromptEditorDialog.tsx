@@ -17,9 +17,9 @@ import {
   DialogTitle,
   DialogFooter
 } from '@/components/ui/dialog'
-import { usePromptStore } from '@/stores/usePromptStore'
+import { usePromptStore, EMPTY_PROMPT_PARAMS } from '@/stores/usePromptStore'
 import { useTranslation } from 'react-i18next'
-import type { Prompt, PromptCategory } from '@/stores/usePromptStore'
+import type { Prompt, PromptCategory, PromptParams } from '@/stores/usePromptStore'
 
 interface PromptEditorDialogProps {
   open: boolean
@@ -37,6 +37,7 @@ interface FormData {
   remark: string
   categoryId: string
   tags: string[]
+  params: PromptParams
 }
 
 export function PromptEditorDialog({
@@ -54,7 +55,8 @@ export function PromptEditorDialog({
     previewImage: '',
     remark: '',
     categoryId: '',
-    tags: []
+    tags: [],
+    params: { ...EMPTY_PROMPT_PARAMS }
   })
   const [tagsInput, setTagsInput] = useState('')
   const [isUploading, setIsUploading] = useState(false)
@@ -70,7 +72,8 @@ export function PromptEditorDialog({
         previewImage: prompt.previewImage,
         remark: prompt.remark,
         categoryId: prompt.categoryId,
-        tags: prompt.tags
+        tags: prompt.tags,
+        params: { ...EMPTY_PROMPT_PARAMS, ...(prompt.params || {}) }
       })
       setTagsInput(prompt.tags.join(', '))
     } else {
@@ -83,7 +86,8 @@ export function PromptEditorDialog({
         previewImage: '',
         remark: '',
         categoryId: defaultCategoryId,
-        tags: []
+        tags: [],
+        params: { ...EMPTY_PROMPT_PARAMS }
       })
       setTagsInput('')
     }
@@ -92,6 +96,20 @@ export function PromptEditorDialog({
   const updateField = useCallback(<K extends keyof FormData>(field: K, value: FormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }, [])
+
+  const updateParam = useCallback(<K extends keyof PromptParams>(field: K, value: PromptParams[K]) => {
+    setFormData((prev) => ({ ...prev, params: { ...prev.params, [field]: value } }))
+  }, [])
+
+  /** 数字输入框：留空视为"不填"，写入 null */
+  const handleNumberParam = useCallback(
+    (field: 'steps' | 'cfg' | 'seed' | 'width' | 'height') =>
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value.trim()
+        updateParam(field, raw === '' ? null : (Number(raw) as never))
+      },
+    [updateParam]
+  )
 
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -299,6 +317,108 @@ export function PromptEditorDialog({
               rows={2}
               className="font-mono text-sm"
             />
+          </div>
+
+          <div className="rounded-lg border border-border-subtle bg-muted/40 p-4">
+            <div className="mb-3 flex items-baseline justify-between">
+              <Label className="text-sm font-medium">{t('prompt.editor.paramsTitle')}</Label>
+              <span className="text-[11px] text-muted-foreground">{t('prompt.editor.paramsHint')}</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="param-model">{t('prompt.editor.modelLabel')}</Label>
+                <Input
+                  id="param-model"
+                  value={formData.params.model}
+                  onChange={(e) => updateParam('model', e.target.value)}
+                  placeholder={t('prompt.editor.modelPlaceholder')}
+                  className="font-mono text-xs"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="param-sampler">{t('prompt.editor.samplerLabel')}</Label>
+                <Input
+                  id="param-sampler"
+                  value={formData.params.sampler}
+                  onChange={(e) => updateParam('sampler', e.target.value)}
+                  placeholder={t('prompt.editor.samplerPlaceholder')}
+                  className="font-mono text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-4 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="param-steps">{t('prompt.editor.stepsLabel')}</Label>
+                <Input
+                  id="param-steps"
+                  type="number"
+                  min={1}
+                  value={formData.params.steps ?? ''}
+                  onChange={handleNumberParam('steps')}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="param-cfg">{t('prompt.editor.cfgLabel')}</Label>
+                <Input
+                  id="param-cfg"
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  value={formData.params.cfg ?? ''}
+                  onChange={handleNumberParam('cfg')}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="param-width">{t('prompt.editor.widthLabel')}</Label>
+                <Input
+                  id="param-width"
+                  type="number"
+                  min={1}
+                  value={formData.params.width ?? ''}
+                  onChange={handleNumberParam('width')}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="param-height">{t('prompt.editor.heightLabel')}</Label>
+                <Input
+                  id="param-height"
+                  type="number"
+                  min={1}
+                  value={formData.params.height ?? ''}
+                  onChange={handleNumberParam('height')}
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="param-seed">{t('prompt.editor.seedLabel')}</Label>
+                <Input
+                  id="param-seed"
+                  type="number"
+                  min={0}
+                  value={formData.params.seed ?? ''}
+                  onChange={handleNumberParam('seed')}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="param-scheduler">{t('prompt.editor.schedulerLabel')}</Label>
+                <Input
+                  id="param-scheduler"
+                  value={formData.params.scheduler}
+                  onChange={(e) => updateParam('scheduler', e.target.value)}
+                  placeholder={t('prompt.editor.schedulerPlaceholder')}
+                  className="font-mono text-xs"
+                />
+              </div>
+            </div>
           </div>
         </div>
 

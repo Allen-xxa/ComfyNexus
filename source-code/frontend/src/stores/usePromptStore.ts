@@ -13,6 +13,37 @@ import { mockPrompts, mockCategories } from '@/mocks/prompt'
 import type { CategoryIconName } from '@/mocks/prompt'
 
 /**
+ * 生成参数（决定这条配方能否被复现）
+ */
+export interface PromptParams {
+  model: string
+  sampler: string
+  scheduler: string
+  steps: number | null
+  cfg: number | null
+  seed: number | null
+  width: number | null
+  height: number | null
+  duration: number | null
+  assetType: string
+  sourceAssetId: string
+}
+
+export const EMPTY_PROMPT_PARAMS: PromptParams = {
+  model: '',
+  sampler: '',
+  scheduler: '',
+  steps: null,
+  cfg: null,
+  seed: null,
+  width: null,
+  height: null,
+  duration: null,
+  assetType: '',
+  sourceAssetId: ''
+}
+
+/**
  * 提示词配方接口
  */
 export interface Prompt {
@@ -28,6 +59,7 @@ export interface Prompt {
   updatedAt: string
   isFavorite: boolean
   usageCount?: number
+  params: PromptParams
 }
 
 /**
@@ -58,6 +90,18 @@ interface PromptResponse {
   created_at: string
   updated_at: string
   is_favorite: boolean
+  usage_count?: number
+  model?: string
+  sampler?: string
+  scheduler?: string
+  steps?: number | null
+  cfg?: number | null
+  seed?: number | null
+  width?: number | null
+  height?: number | null
+  duration?: number | null
+  asset_type?: string
+  source_asset_id?: string
 }
 
 /**
@@ -84,6 +128,7 @@ export interface PromptInput {
   previewImage?: string
   remark?: string
   tags?: string[]
+  params?: PromptParams
 }
 
 /**
@@ -198,7 +243,37 @@ const transformPrompt = (backendPrompt: PromptResponse): Prompt => ({
   tags: backendPrompt.tags || [],
   createdAt: backendPrompt.created_at,
   updatedAt: backendPrompt.updated_at,
-  isFavorite: backendPrompt.is_favorite || false
+  isFavorite: backendPrompt.is_favorite || false,
+  params: {
+    model: backendPrompt.model || '',
+    sampler: backendPrompt.sampler || '',
+    scheduler: backendPrompt.scheduler || '',
+    steps: backendPrompt.steps ?? null,
+    cfg: backendPrompt.cfg ?? null,
+    seed: backendPrompt.seed ?? null,
+    width: backendPrompt.width ?? null,
+    height: backendPrompt.height ?? null,
+    duration: backendPrompt.duration ?? null,
+    assetType: backendPrompt.asset_type || '',
+    sourceAssetId: backendPrompt.source_asset_id || ''
+  }
+})
+
+/**
+ * 前端参数对象转后端 snake_case
+ */
+export const toBackendParams = (params: PromptParams) => ({
+  model: params.model,
+  sampler: params.sampler,
+  scheduler: params.scheduler,
+  steps: params.steps,
+  cfg: params.cfg,
+  seed: params.seed,
+  width: params.width,
+  height: params.height,
+  duration: params.duration,
+  asset_type: params.assetType,
+  source_asset_id: params.sourceAssetId
 })
 
 /**
@@ -406,7 +481,8 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
           tags: data.tags || [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          isFavorite: false
+          isFavorite: false,
+          params: data.params || { ...EMPTY_PROMPT_PARAMS }
         }
         
         set((state) => ({
@@ -425,7 +501,8 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
         data.negativePrompt || '',
         data.previewImage || '',
         data.remark || '',
-        data.tags || []
+        data.tags || [],
+        toBackendParams(data.params || EMPTY_PROMPT_PARAMS)
       )
       
       if (!response.success || !response.prompt) {
@@ -492,7 +569,8 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
         updates.negativePrompt,
         updates.previewImage,
         updates.remark,
-        updates.tags
+        updates.tags,
+        updates.params ? toBackendParams(updates.params) : undefined
       )
       
       if (!response.success) {

@@ -405,15 +405,16 @@ class GalleryController:
             logger.error(f"[GalleryController] 导出工作流到指定路径失败: {e}")
             return {"success": False, "error_message": str(e)}
 
-    def gallery_export_to_prompt_library(self, asset_id: str) -> dict:
+    def gallery_export_to_prompt_library(self, asset_id: str, force: bool = False) -> dict:
         """
         导出资产到提示词库
 
-        将带工作流的图片资产导出为提示词库中的一条记录，
-        自动填充正向/反向提示词，图像作为预览图，分类归入"未分类"。
+        将资产导出为提示词库中的一条记录，自动填充正/反向提示词、生成参数，
+        图像（视频则用缩略图）作为预览图，分类归入"未分类"。
 
         Args:
             asset_id: 资产ID
+            force: 资产未解析到提示词时仍要导入（只保留图片和参数）
 
         Returns:
             {
@@ -434,38 +435,52 @@ class GalleryController:
             positive_prompt = (asset.prompt or "").strip()
             negative_prompt = (asset.negative_prompt or "").strip()
 
-            # 3. 正反向都为空，返回特殊标记让前端弹窗提示
-            if not positive_prompt and not negative_prompt:
+            # 3. 正反向都为空，返回特殊标记让前端弹窗确认
+            if not positive_prompt and not negative_prompt and not force:
+                logger.info(f"[GalleryController] 资产未解析到提示词，等待用户确认: {asset_id}")
                 return {
                     "success": False,
                     "error_message": "no_prompt_detected",
                     "has_workflow": True
                 }
 
-            # 如果正向为空但有反向，将反向提示词作为正向提示词填入
-            # 因为 create_prompt 要求 positive_prompt 不能为空
-            if not positive_prompt:
-                positive_prompt = negative_prompt
-                negative_prompt = ""
+            # 正向允许为空（只有反向提示词的资产不必硬塞到正向里）
 
-            # 4. 读取原图文件，超 5MB 自动压缩为 WebP
+            # 4. 读取预览图源文件
+            # 图片直接用原图；视频没有可用的静态帧，用扫描时生成的缩略图
             file_path = Path(asset.file_path)
             if not file_path.exists():
                 return {"success": False, "error_message": "原始文件不存在"}
 
-            with open(file_path, "rb") as f:
+            preview_source = file_path
+            if asset.asset_type == "video":
+                thumb_rel = (asset.thumbnail_path or "").strip()
+                # thumbnail_path 存的是相对 POSIX 路径，按段拆开再拼，避免依赖 os.sep
+                thumb_file = (
+                    gallery_storage.thumbnails_dir.parent.joinpath(*thumb_rel.split("/"))
+                    if thumb_rel else None
+                )
+                if thumb_file and thumb_file.exists():
+                    preview_source = thumb_file
+                else:
+                    return {
+                        "success": False,
+                        "error_message": "视频缺少缩略图，无法作为预览图",
+                    }
+
+            with open(preview_source, "rb") as f:
                 image_bytes = f.read()
 
             # 超过 5MB 时自动压缩
             MAX_SIZE = 5 * 1024 * 1024
-            compressed_filename = asset.filename
+            compressed_filename = preview_source.name
 
             if len(image_bytes) > MAX_SIZE:
                 try:
                     from PIL import Image
                     from io import BytesIO
 
-                    with Image.open(file_path) as img:
+                    with Image.open(preview_source) as img:
                         # CMYK 需先转 RGB（直接转 RGBA 颜色会失真）
                         if img.mode == 'CMYK':
                             img = img.convert('RGB')
@@ -490,7 +505,7 @@ class GalleryController:
                             return {"success": False, "error_message": "图片压缩后仍超过5MB限制，无法作为预览图"}
 
                         image_bytes = compressed_bytes
-                        compressed_filename = f"{file_path.stem}.webp"
+                        compressed_filename = f"{preview_source.stem}.webp"
                         logger.info(f"[GalleryController] 图片已压缩为 WebP (quality={quality}): "
                                    f"{len(image_bytes) / 1024:.0f}KB")
 
@@ -530,8 +545,19 @@ class GalleryController:
                     "category_id": category_id,
                     "preview_image": preview_image_path,
                     "remark": "从资产库导入",
-                    "tags": []
-                })
+                    "tags": list(asset.tags or []),
+                    # 生成参数：决定这条配方能否被复现
+                    "model": asset.model or "",
+                    "sampler": asset.sampler or "",
+                    "steps": asset.steps,
+                    "cfg": asset.cfg,
+                    "seed": asset.seed,
+                    "width": asset.width,
+                    "height": asset.height,
+                    "duration": asset.duration,
+                    "asset_type": asset.asset_type or "",
+                    "source_asset_id": asset.id,
+                }, allow_empty_positive=True)
                 logger.info(f"[GalleryController] 导出到提示词库成功: {prompt_name}")
                 return {"success": True, "prompt": new_prompt}
             except ValueError as e:

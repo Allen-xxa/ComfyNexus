@@ -27,7 +27,7 @@ import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifi
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 
 const FIXED_MODULE_IDS = ['home', 'workspace', 'terminal']
-const FOOTER_MODULE_IDS = ['env-manage', 'system-settings', 'about', 'feedback']
+const FOOTER_MODULE_IDS = ['env-manage', 'system-settings', 'about']
 
 function SortableMenuItem({ 
   module, 

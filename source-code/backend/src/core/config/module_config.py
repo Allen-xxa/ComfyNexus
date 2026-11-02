@@ -48,8 +48,7 @@ class ModuleConfigManager(ConfigMigrator):
                 "monitor-center": {"enabled": True, "order": 13},
                 "env-manage": {"enabled": True, "order": 14},  # 环境管理默认打开
                 "system-settings": {"enabled": True, "order": 15},
-                "about": {"enabled": True, "order": 16},
-                "feedback": {"enabled": True, "order": 17}
+                "about": {"enabled": True, "order": 16}
             },
             "ui": {
                 "theme": "dark",

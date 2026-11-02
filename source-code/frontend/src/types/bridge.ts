@@ -47,6 +47,24 @@ export interface AppInfo {
   env: string;
 }
 
+/**
+ * 提示词生成参数（决定这条配方能否被复现）
+ * 与后端 Prompt dataclass 的生成参数字段一一对应
+ */
+export interface PromptParamsPayload {
+  model?: string
+  sampler?: string
+  scheduler?: string
+  steps?: number | null
+  cfg?: number | null
+  seed?: number | null
+  width?: number | null
+  height?: number | null
+  duration?: number | null
+  asset_type?: string
+  source_asset_id?: string
+}
+
 export interface PyWebViewAPI {
   // 应用相关 API
   ping: () => Promise<{ status: string }>;
@@ -1029,7 +1047,9 @@ export interface PyWebViewAPI {
     negative_prompt?: string,
     preview_image?: string,
     remark?: string,
-    tags?: string[]
+    tags?: string[],
+    params?: PromptParamsPayload,
+    allow_empty_positive?: boolean
   ) => Promise<{
     success: boolean
     prompt?: {
@@ -1044,6 +1064,17 @@ export interface PyWebViewAPI {
       created_at: string
       updated_at: string
       is_favorite: boolean
+      model?: string
+      sampler?: string
+      scheduler?: string
+      steps?: number | null
+      cfg?: number | null
+      seed?: number | null
+      width?: number | null
+      height?: number | null
+      duration?: number | null
+      asset_type?: string
+      source_asset_id?: string
     }
     error_message?: string
   }>;
@@ -1056,7 +1087,8 @@ export interface PyWebViewAPI {
     negative_prompt?: string,
     preview_image?: string,
     remark?: string,
-    tags?: string[]
+    tags?: string[],
+    params?: PromptParamsPayload
   ) => Promise<{
     success: boolean
     error_message?: string
@@ -1739,7 +1771,7 @@ export interface PyWebViewAPI {
     error_message?: string
   }>;
 
-  gallery_export_to_prompt_library: (assetId: string) => Promise<{
+  gallery_export_to_prompt_library: (assetId: string, force?: boolean) => Promise<{
     success: boolean
     error_message?: string
     prompt?: any

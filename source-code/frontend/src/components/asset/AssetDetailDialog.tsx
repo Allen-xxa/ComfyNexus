@@ -154,15 +154,15 @@ export function AssetDetailDialog({
     }
   }
 
-  const handleExportToPromptLibrary = async () => {
+  const handleImportToPromptLibrary = async () => {
     if (!asset?.id) return
     const result = await exportToPromptLibrary(asset.id)
     if (result.success) {
-      toast.success(t('asset.toast.exportToPromptLibrarySuccess'))
+      toast.success(t('asset.toast.importToPromptLibrarySuccess'))
     } else if (result.error_message === 'no_prompt_detected') {
       toast.warning(t('asset.noPromptDetected'))
     } else {
-      toast.error(result.error_message || t('asset.toast.exportFailed'))
+      toast.error(result.error_message || t('asset.toast.importToPromptLibraryFailed'))
     }
   }
 
@@ -283,11 +283,11 @@ export function AssetDetailDialog({
                 <div className="absolute right-0 top-full z-50 hidden min-w-[180px] rounded-lg border border-border-subtle bg-surface/95 p-1 shadow-soft-lg backdrop-blur-lg group-hover:block">
                   <Button
                     variant="ghost"
-                    onClick={handleExportToPromptLibrary}
+                    onClick={handleImportToPromptLibrary}
                     className="h-auto w-full justify-start gap-3 px-3 py-2 text-sm"
                   >
                     <BookOpen className="size-4" />
-                    {t('asset.contextMenu.exportToPromptLibrary')}
+                    {t('asset.contextMenu.importToPromptLibrary')}
                   </Button>
                   <Button
                     variant="ghost"

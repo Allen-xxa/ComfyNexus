@@ -5,10 +5,11 @@
     python scripts/set_app_icon.py assets/icons/xxx.png     # 换成指定图片
     python scripts/set_app_icon.py D:/design/new.png --no-transparent
 
-生成三份产物：
-    source-code/icon.ico                 窗口图标 + PyInstaller 打包图标
-    source-code/assets/icon.png          系统托盘图标
-    source-code/frontend/public/favicon.ico   浏览器标签页图标
+生成四份产物：
+    source-code/icon.ico                     窗口图标 + PyInstaller 打包图标
+    source-code/assets/icon.png              系统托盘图标
+    source-code/frontend/public/favicon.ico  浏览器标签页图标
+    source-code/frontend/public/app-icon.png 侧边栏与关于页的 logo
 
 默认会把纯白背景抠成透明（`--no-transparent` 可关闭）。AI 出图的图标基本都是
 不透明白底，不抠的话任务栏上会显示成一个白方块。
@@ -29,6 +30,7 @@ DEFAULT_SOURCE = SOURCE_ROOT / "assets" / "icons" / "comfynexus-v4.png"
 ICO_PATH = SOURCE_ROOT / "icon.ico"
 PNG_PATH = SOURCE_ROOT / "assets" / "icon.png"
 FAVICON_PATH = SOURCE_ROOT / "frontend" / "public" / "favicon.ico"
+APP_ICON_PATH = SOURCE_ROOT / "frontend" / "public" / "app-icon.png"
 
 
 def main() -> int:
@@ -86,6 +88,18 @@ def main() -> int:
             dim_whites=dim_whites,
         )
         FAVICON_PATH.with_suffix(".tmp.png").unlink(missing_ok=True)
+        # 侧边栏 / 关于页的 logo，尺寸固定 256
+        build_app_icons(
+            source,
+            APP_ICON_PATH.with_suffix(".tmp.ico"),
+            APP_ICON_PATH,
+            ico_sizes=(256,),
+            png_size=256,
+            transparent=transparent,
+            tolerance=args.tolerance,
+            dim_whites=dim_whites,
+        )
+        APP_ICON_PATH.with_suffix(".tmp.ico").unlink(missing_ok=True)
     except Exception as e:
         print(f"生成失败: {e}")
         return 1
@@ -96,6 +110,7 @@ def main() -> int:
     print(f"已生成: {ico}  尺寸 {describe_ico(ico)}")
     print(f"已生成: {png}")
     print(f"已生成: {FAVICON_PATH}")
+    print(f"已生成: {APP_ICON_PATH}")
     print("重启应用后生效；打包时 PyInstaller 会使用同一份 icon.ico")
     return 0
 

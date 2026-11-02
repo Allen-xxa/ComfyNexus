@@ -106,7 +106,7 @@ export function AboutHeader({ version }: AboutHeaderProps) {
           <img
             src="/app-icon.png"
             alt="ComfyNexus"
-            className="size-14 rounded-xl shadow-lg"
+            className="size-14"
           />
           <div className="flex flex-col">
             <div className="mb-1 flex items-center gap-3">

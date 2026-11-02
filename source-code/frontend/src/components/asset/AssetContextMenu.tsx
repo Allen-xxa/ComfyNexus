@@ -136,22 +136,22 @@ export function AssetContextMenu({ asset, position, onClose }: AssetContextMenuP
     onClose()
   }
 
-  const handleExportToPromptLibrary = async () => {
-    const result = await exportToPromptLibrary(asset.id)
+  const handleImportToPromptLibrary = async (force = false) => {
+    const result = await exportToPromptLibrary(asset.id, force)
     if (result.success) {
-      toast.success(t('asset.toast.exportToPromptLibrarySuccess'))
+      toast.success(t('asset.toast.importToPromptLibrarySuccess'))
       onClose()
     } else if (result.error_message === 'no_prompt_detected') {
       setShowNoPromptConfirm(true)
     } else {
-      toast.error(result.error_message || t('asset.toast.exportFailed'))
+      toast.error(result.error_message || t('asset.toast.importToPromptLibraryFailed'))
       onClose()
     }
   }
 
-  const handleConfirmNoPrompt = () => {
+  const handleConfirmNoPrompt = async () => {
     setShowNoPromptConfirm(false)
-    onClose()
+    await handleImportToPromptLibrary(true)
   }
 
   return (
@@ -181,6 +181,16 @@ export function AssetContextMenu({ asset, position, onClose }: AssetContextMenuP
         {t('asset.contextMenu.openLocation')}
       </Button>
 
+      {/* 转入提示词库：不依赖工作流，只要资产带提示词或参数都可导入 */}
+      <Button
+        variant="ghost"
+        onClick={() => handleImportToPromptLibrary(false)}
+        className="h-auto w-full justify-start gap-3 px-3 py-2 text-sm"
+      >
+        <BookOpen className="size-4" />
+        {t('asset.contextMenu.importToPromptLibrary')}
+      </Button>
+
       {asset.hasWorkflow && (
         <div className="group relative">
           <Button
@@ -195,14 +205,6 @@ export function AssetContextMenu({ asset, position, onClose }: AssetContextMenuP
           </Button>
 
           <div className="absolute left-full top-0 hidden min-w-[180px] rounded-lg border border-border-subtle bg-surface/95 p-1 shadow-soft-lg backdrop-blur-lg group-hover:block">
-            <Button
-              variant="ghost"
-              onClick={handleExportToPromptLibrary}
-              className="h-auto w-full justify-start gap-3 px-3 py-2 text-sm"
-            >
-              <BookOpen className="size-4" />
-              {t('asset.contextMenu.exportToPromptLibrary')}
-            </Button>
             <Button
               variant="ghost"
               onClick={handleExportToWorkflow}

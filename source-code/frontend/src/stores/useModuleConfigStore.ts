@@ -104,7 +104,7 @@ export const useModuleConfigStore = create<ModuleConfigState>((set, get) => ({
    */
   toggleModule: (moduleId: string) => {
     // 核心模块不可禁用（硬编码）
-    const coreModuleIds = ['home', 'system-settings', 'about', 'feedback']
+    const coreModuleIds = ['home', 'system-settings', 'about']
     if (coreModuleIds.includes(moduleId)) {
       console.warn(`核心模块 ${moduleId} 不可禁用`)
       return
@@ -140,7 +140,7 @@ export const useModuleConfigStore = create<ModuleConfigState>((set, get) => ({
    */
   isModuleEnabled: (moduleId: string) => {
     // 核心模块始终启用（硬编码，不检测配置文件）
-    const coreModuleIds = ['home', 'system-settings', 'about', 'feedback']
+    const coreModuleIds = ['home', 'system-settings', 'about']
     if (coreModuleIds.includes(moduleId)) {
       return true
     }

@@ -13,7 +13,7 @@ from datetime import datetime
 class Prompt:
     """
     提示词配方数据模型
-    
+
     Attributes:
         id: UUID v4，唯一标识
         name: 配方名称，必填
@@ -27,6 +27,19 @@ class Prompt:
         usage_count: 使用次数，默认 0
         created_at: 创建时间，ISO8601 格式
         updated_at: 更新时间，ISO8601 格式
+
+    生成参数（用于复现，均可为空）：
+        model: 基础模型 / checkpoint 文件名
+        sampler: 采样器名称
+        scheduler: 调度器名称
+        steps: 采样步数
+        cfg: CFG / 引导系数
+        seed: 随机种子
+        width: 输出宽度
+        height: 输出高度
+        duration: 视频时长（秒），仅视频资产有值
+        asset_type: 来源类型 image / video
+        source_asset_id: 来源资产ID，用于追溯
     """
     id: str
     name: str
@@ -40,6 +53,19 @@ class Prompt:
     usage_count: int = 0
     created_at: str = ""
     updated_at: str = ""
+
+    # 生成参数
+    model: str = ""
+    sampler: str = ""
+    scheduler: str = ""
+    steps: Optional[int] = None
+    cfg: Optional[float] = None
+    seed: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    duration: Optional[float] = None
+    asset_type: str = ""
+    source_asset_id: str = ""
     
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""
@@ -56,11 +82,22 @@ class Prompt:
             'usage_count': self.usage_count,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
+            'model': self.model,
+            'sampler': self.sampler,
+            'scheduler': self.scheduler,
+            'steps': self.steps,
+            'cfg': self.cfg,
+            'seed': self.seed,
+            'width': self.width,
+            'height': self.height,
+            'duration': self.duration,
+            'asset_type': self.asset_type,
+            'source_asset_id': self.source_asset_id,
         }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Prompt':
-        """从字典创建实例"""
+        """从字典创建实例（旧数据缺少参数字段时使用默认值）"""
         return cls(
             id=data.get('id', ''),
             name=data.get('name', ''),
@@ -74,6 +111,17 @@ class Prompt:
             usage_count=data.get('usage_count', 0),
             created_at=data.get('created_at', ''),
             updated_at=data.get('updated_at', ''),
+            model=data.get('model', '') or '',
+            sampler=data.get('sampler', '') or '',
+            scheduler=data.get('scheduler', '') or '',
+            steps=data.get('steps'),
+            cfg=data.get('cfg'),
+            seed=data.get('seed'),
+            width=data.get('width'),
+            height=data.get('height'),
+            duration=data.get('duration'),
+            asset_type=data.get('asset_type', '') or '',
+            source_asset_id=data.get('source_asset_id', '') or '',
         )
 
 

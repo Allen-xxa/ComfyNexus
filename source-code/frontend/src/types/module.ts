@@ -224,16 +224,5 @@ export const MODULE_REGISTRY: Record<string, ModuleMetadata> = {
     category: 'core',
     isCore: true,
     order: 16
-  },
-  'feedback': {
-    id: 'feedback',
-    name: '问题反馈',
-    description: '提交 Bug 报告或功能建议',
-    icon: 'MessageSquare',
-    path: '/feedback',
-    component: 'FeedbackPage',
-    category: 'core',
-    isCore: true,
-    order: 17
   }
 }
