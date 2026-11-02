@@ -399,6 +399,11 @@ def main():
         level="INFO"
     )
     
+    # 必须在创建任何窗口之前设置，否则任务栏会把窗口归到 python.exe 分组并沿用其图标
+    from backend.src.utils.window_icon import set_app_user_model_id
+
+    set_app_user_model_id()
+
     migrate_from_internal(logger)
     cleanup_old_updater(logger)
     
@@ -1100,7 +1105,18 @@ def main():
             _apply_winforms_monkey_patches()
         except Exception as e:
             logger.warning(f"[on_webview_ready] OpenFolderDialog monkey-patch 失败: {e}")
-        
+
+        # 修正任务栏/标题栏图标。
+        # pywebview 6.2.1 的 edgechromium 后端未实现 webview.start(icon=...)，
+        # 只有 winforms 后端会设置 Form.Icon，故这里手动写入窗口图标。
+        if _icon_arg:
+            try:
+                from backend.src.utils.window_icon import apply_icon_to_window_by_title
+
+                apply_icon_to_window_by_title('ComfyNexus', _icon_arg, retries=10, interval=0.1)
+            except Exception as e:
+                logger.warning(f"[on_webview_ready] 应用窗口图标失败: {e}")
+
         if floating_window_needs_show:
             import ctypes
             user32 = ctypes.windll.user32
