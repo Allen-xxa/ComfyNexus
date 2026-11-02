@@ -17,9 +17,9 @@ AI 出图的图标通常是纯白不透明背景，直接做成 .ico 后任务�
 """
 
 from pathlib import Path
-from typing import Iterable, Sequence, Tuple
+from typing import Iterable, Optional, Sequence, Tuple
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
 
 # Windows 资源管理器与任务栏实际会用到的尺寸
 DEFAULT_ICO_SIZES: Tuple[int, ...] = (16, 24, 32, 48, 64, 128, 256)
@@ -111,6 +111,56 @@ def make_background_transparent(
     return result
 
 
+def dim_near_white(
+    image: Image.Image,
+    factor: float = 0.84,
+    min_luma: int = 200,
+    max_saturation: int = 18,
+) -> Image.Image:
+    """把接近纯白、低饱和的区域整体压暗一档。
+
+    为什么需要：本项目图标主体（齿轮）是白色。抠掉白底后，在 Windows 浅色主题的
+    任务栏（约 #F3F3F3）上白色主体没有对比度，只剩中间的黄色 C 可见。
+    压暗一档后深浅背景下都能看清，且不改变设计结构。
+
+    Args:
+        image: 输入图（RGBA）
+        factor: 亮度系数，1.0 表示不变，越小越暗
+        min_luma: 亮度高于此值的像素才参与压暗
+        max_saturation: 饱和度低于此值的像素才参与压暗（避免把彩色部分一起压暗）
+
+    Returns:
+        新的 RGBA 图像
+    """
+    if factor >= 1.0:
+        return image
+
+    image = image.convert("RGBA")
+    rgb = image.convert("RGB")
+    r, g, b = rgb.split()
+
+    brightest = ImageChops.lighter(ImageChops.lighter(r, g), b)
+    darkest = ImageChops.darker(ImageChops.darker(r, g), b)
+    saturation = ImageChops.subtract(brightest, darkest)
+
+    # 两个条件同时成立才压暗：够亮 且 够灰
+    bright_mask = brightest.point(lambda v: 255 if v > min_luma else 0)
+    gray_mask = saturation.point(lambda v: 255 if v < max_saturation else 0)
+    mask = ImageChops.multiply(bright_mask, gray_mask)
+
+    dimmed = ImageEnhance.Brightness(rgb).enhance(factor)
+
+    # 注意：不能直接对 RGBA 图 paste(..., mask)。PIL 在带 mask 的 paste 里会连
+    # alpha 通道一起混合，透明像素会被刷成不透明。这里只在 RGB 上合成，
+    # 再把原始 alpha 原封不动贴回去。
+    out_rgb = rgb.copy()
+    out_rgb.paste(dimmed, (0, 0), mask)
+
+    result = out_rgb.convert("RGBA")
+    result.putalpha(image.getchannel("A"))
+    return result
+
+
 def build_app_icons(
     source: Path,
     ico_path: Path,
@@ -119,6 +169,7 @@ def build_app_icons(
     png_size: int = DEFAULT_PNG_SIZE,
     transparent: bool = False,
     tolerance: int = 10,
+    dim_whites: Optional[float] = None,
 ) -> Tuple[Path, Path]:
     """
     由源图生成 ico 与 png
@@ -131,6 +182,7 @@ def build_app_icons(
         png_size: png 边长
         transparent: 是否把纯色背景抠成透明
         tolerance: 抠图容差，仅 transparent 为 True 时生效
+        dim_whites: 近白色主体的压暗系数（如 0.84），None 表示不处理
 
     Returns:
         (ico_path, png_path)
@@ -138,6 +190,8 @@ def build_app_icons(
     image = _load_square(source)
     if transparent:
         image = make_background_transparent(image, tolerance=tolerance)
+    if dim_whites is not None:
+        image = dim_near_white(image, factor=dim_whites)
 
     ico_path.parent.mkdir(parents=True, exist_ok=True)
     png_path.parent.mkdir(parents=True, exist_ok=True)

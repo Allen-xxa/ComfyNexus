@@ -15,6 +15,7 @@ for _p in (str(_BACKEND_DIR), str(_SOURCE_ROOT)):
 from backend.src.utils.icon_builder import (  # noqa: E402
     build_app_icons,
     describe_ico,
+    dim_near_white,
     make_background_transparent,
 )
 
@@ -130,3 +131,39 @@ def test_build_app_icons_透明选项(tmp_path):
     with Image.open(png) as image:
         assert image.mode == "RGBA"
         assert image.getpixel((0, 0))[3] == 0
+
+
+def test_压暗近白色主体():
+    image = Image.new("RGBA", (64, 64), (255, 255, 255, 255))
+    # 一块彩色区域，不应被压暗
+    for x in range(10):
+        for y in range(10):
+            image.putpixel((x, y), (240, 192, 64, 255))
+
+    result = dim_near_white(image, factor=0.84)
+
+    white = result.getpixel((32, 32))
+    colored = result.getpixel((5, 5))
+    assert white[0] < 230, "近白色应被压暗"
+    assert colored[:3] == (240, 192, 64), "彩色区域不应被改动"
+
+
+def test_压暗系数为1时不改动():
+    image = Image.new("RGBA", (32, 32), (250, 250, 250, 255))
+
+    result = dim_near_white(image, factor=1.0)
+
+    assert result.getpixel((16, 16)) == (250, 250, 250, 255)
+
+
+def test_压暗不破坏透明通道():
+    """回归：带 mask 的 paste 会连 alpha 一起混合，透明像素曾被刷成不透明"""
+    image = Image.new("RGBA", (64, 64), (250, 250, 250, 0))
+    for x in range(20, 44):
+        for y in range(20, 44):
+            image.putpixel((x, y), (250, 250, 250, 255))
+
+    result = dim_near_white(image, factor=0.84)
+
+    assert result.getpixel((0, 0))[3] == 0, "原本透明的区域应保持透明"
+    assert result.getpixel((32, 32))[3] == 255, "原本不透明的区域应保持不透明"

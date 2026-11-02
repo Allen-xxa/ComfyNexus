@@ -50,6 +50,13 @@ def main() -> int:
         default=10,
         help="抠图容差（0-255，默认 10）。背景不干净时可调大",
     )
+    parser.add_argument(
+        "--dim-whites",
+        type=float,
+        default=0.84,
+        help="近白色主体的压暗系数（默认 0.84）。1.0 表示保持原白色；"
+        "图标主体为白色时，在浅色任务栏上会没有对比度",
+    )
     args = parser.parse_args()
 
     source = Path(args.source)
@@ -57,6 +64,7 @@ def main() -> int:
         source = (Path.cwd() / source).resolve()
 
     transparent = not args.no_transparent
+    dim_whites = None if args.dim_whites >= 1.0 else args.dim_whites
 
     try:
         ico, png = build_app_icons(
@@ -65,6 +73,7 @@ def main() -> int:
             PNG_PATH,
             transparent=transparent,
             tolerance=args.tolerance,
+            dim_whites=dim_whites,
         )
         # favicon 只需要 ico，复用同一张源图
         build_app_icons(
@@ -74,6 +83,7 @@ def main() -> int:
             ico_sizes=(16, 32, 48),
             transparent=transparent,
             tolerance=args.tolerance,
+            dim_whites=dim_whites,
         )
         FAVICON_PATH.with_suffix(".tmp.png").unlink(missing_ok=True)
     except Exception as e:
@@ -82,6 +92,7 @@ def main() -> int:
 
     print(f"源图: {source}")
     print(f"透明背景: {'是' if transparent else '否'}")
+    print(f"白色主体压暗: {dim_whites if dim_whites else '否'}")
     print(f"已生成: {ico}  尺寸 {describe_ico(ico)}")
     print(f"已生成: {png}")
     print(f"已生成: {FAVICON_PATH}")
