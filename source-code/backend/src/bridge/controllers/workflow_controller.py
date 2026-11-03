@@ -663,6 +663,11 @@ class WorkflowController:
         else:
             target_parent = source_dir.parent
         
+        # 防环：不能把文件夹移动到自身或其子文件夹下（new_parent_id 基于相对路径）
+        if new_parent_id is not None and new_parent_id not in ("", "root"):
+            if new_parent_id == folder_id or new_parent_id.startswith(f"{folder_id}/"):
+                return {"success": False, "error": "不能移动到自身或其子文件夹下"}
+        
         target_dir = target_parent / safe_name
         
         if target_dir.exists() and target_dir != source_dir:
@@ -729,12 +734,14 @@ class WorkflowController:
             logger.error(f"更新文件夹失败: {e}")
             return {"success": False, "error": str(e)}
 
-    def delete_folder(self, folder_id: str) -> Dict[str, Any]:
+    def delete_folder(self, folder_id: str, move_contents_to_root: bool = False) -> Dict[str, Any]:
         """
-        删除文件夹（仅删除空目录）
+        删除文件夹
         
         Args:
             folder_id: 文件夹 ID（格式为 "folder:{relative_path}"）
+            move_contents_to_root: 为 True 时先把该文件夹（含子文件夹）内的所有工作流
+                移动到根目录，再删除腾空的目录；为 False 时保持原行为，仅允许删除空目录。
             
         Returns:
             操作结果
@@ -751,19 +758,36 @@ class WorkflowController:
         folder_path = folder_id[7:].replace("\\", "/")
         target_dir = self._workflows_dir / folder_path
         
+        def _purge_folder_metadata():
+            self._metadata.folders = [
+                f for f in self._metadata.folders
+                if f.id != folder_id and not (f.id or "").startswith(f"{folder_id}/")
+            ]
+        
         if not target_dir.exists():
-            self._metadata.folders = [f for f in self._metadata.folders if f.id != folder_id]
+            _purge_folder_metadata()
             self._save_metadata()
             return {"success": True, "message": "文件夹已不存在于文件系统"}
         
         try:
-            has_files = any(target_dir.rglob("*.json"))
-            if has_files:
-                return {"success": False, "error": "文件夹不为空，请先移动或删除其中的工作流"}
+            if move_contents_to_root:
+                json_rel_paths = sorted(
+                    str(p.relative_to(self._workflows_dir)).replace("\\", "/")
+                    for p in target_dir.rglob("*.json") if p.is_file()
+                )
+                for rel in json_rel_paths:
+                    res = self.move_to_folder(rel, None)
+                    if not res.get("success"):
+                        return {"success": False, "error": res.get("error", f"移动工作流失败: {rel}")}
+                import shutil
+                shutil.rmtree(target_dir)
+            else:
+                has_files = any(target_dir.rglob("*.json"))
+                if has_files:
+                    return {"success": False, "error": "文件夹不为空，请先移动或删除其中的工作流"}
+                target_dir.rmdir()
             
-            target_dir.rmdir()
-            
-            self._metadata.folders = [f for f in self._metadata.folders if f.id != folder_id]
+            _purge_folder_metadata()
             
             for filename, metadata in self._metadata.workflows.items():
                 if metadata.folder_id == folder_id:
@@ -771,7 +795,7 @@ class WorkflowController:
             
             self._save_metadata()
             
-            logger.info(f"删除文件夹: {target_dir}")
+            logger.info(f"删除文件夹: {target_dir} (move_contents_to_root={move_contents_to_root})")
             return {"success": True}
             
         except OSError as e:

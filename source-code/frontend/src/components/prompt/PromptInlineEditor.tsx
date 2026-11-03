@@ -26,6 +26,8 @@ import { useTranslation } from 'react-i18next'
 interface PromptInlineEditorProps {
   initial: Prompt | null
   categories: PromptCategory[]
+  /** 新建态的默认分类（如从分类树菜单进入），编辑态忽略 */
+  defaultCategoryId?: string
   onSave: (data: PromptInput) => Promise<boolean>
   onCancel: () => void
 }
@@ -53,6 +55,7 @@ const emptyForm = (categoryId = ''): FormData => ({
 export function PromptInlineEditor({
   initial,
   categories,
+  defaultCategoryId: initialCategoryId,
   onSave,
   onCancel
 }: PromptInlineEditorProps) {
@@ -60,7 +63,13 @@ export function PromptInlineEditor({
   const uploadImage = usePromptStore((state) => state.uploadImage)
 
   const availableCategories = categories.filter((c) => c.id !== 'all' && c.id !== 'favorites')
-  const defaultCategoryId = availableCategories[0]?.id ?? ''
+  const assignableCategoryIds = new Set(
+    availableCategories.flatMap((c) => [c.id, ...(c.children ?? []).map((child) => child.id)])
+  )
+  const defaultCategoryId =
+    (initialCategoryId && assignableCategoryIds.has(initialCategoryId)
+      ? initialCategoryId
+      : undefined) ?? availableCategories[0]?.id ?? ''
 
   const [formData, setFormData] = useState<FormData>(() => emptyForm(defaultCategoryId))
   const [tagsInput, setTagsInput] = useState('')
@@ -161,7 +170,7 @@ export function PromptInlineEditor({
   const categoryOptions = availableCategories.flatMap((cat) => {
     const options = [{ value: cat.id, label: cat.name }]
     cat.children?.forEach((child) => {
-      options.push({ value: child.id, label: `　${child.name}` })
+      options.push({ value: child.id, label: `${cat.name} / ${child.name}` })
     })
     return options
   })
@@ -170,7 +179,7 @@ export function PromptInlineEditor({
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-5 overflow-y-auto p-5">
         <div className="flex gap-4">
-          <input
+          <Input
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -178,7 +187,7 @@ export function PromptInlineEditor({
             onChange={handleImageSelect}
           />
           {formData.previewImage ? (
-            <div className="relative h-32 w-24 flex-shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-muted">
+            <div className="relative h-32 w-24 shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-muted">
               <img
                 src={formData.previewImage}
                 alt={t('prompt.editor.uploadPreview')}
@@ -197,7 +206,7 @@ export function PromptInlineEditor({
             <Button
               variant="ghost"
               disabled={isUploading}
-              className="flex h-32 w-24 flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/50 bg-muted text-center transition-colors hover:bg-primary/5 disabled:opacity-50"
+              className="flex h-32 w-24 shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/50 bg-muted text-center transition-colors hover:bg-primary/5 disabled:opacity-50"
               onClick={() => fileInputRef.current?.click()}
             >
               {isUploading ? (
@@ -403,7 +412,7 @@ export function PromptInlineEditor({
         </div>
       </div>
 
-      <div className="flex flex-shrink-0 items-center justify-end gap-2 border-t border-border-subtle bg-surface px-5 py-3">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border-subtle bg-surface px-5 py-3">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
           {t('prompt.editor.cancel')}
         </Button>

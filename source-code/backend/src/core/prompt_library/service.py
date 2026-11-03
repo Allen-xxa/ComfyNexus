@@ -721,9 +721,11 @@ class PromptLibraryService:
             
             parent_id = data.get('parent_id')
             if parent_id:
-                parent_exists = any(c['id'] == parent_id for c in categories)
-                if not parent_exists:
+                parent = next((c for c in categories if c['id'] == parent_id), None)
+                if not parent:
                     raise ValueError("父分类不存在")
+                if parent.get('is_system', False) or parent.get('parent_id'):
+                    raise ValueError("只支持两级分类，父分类必须是用户自建的顶级分类")
             
             max_order = max(
                 (c['sort_order'] for c in categories if c.get('parent_id') == parent_id),
@@ -794,6 +796,67 @@ class PromptLibraryService:
             self._save_categories(categories)
             logger.info(f"更新分类成功: {category_id}")
             return True
+    
+    def move_category(self, category_id: str, new_parent_id: Optional[str], new_index: int) -> None:
+        """
+        移动分类：换父级和/或同级排序，移动后重排受影响分组的 sort_order
+        
+        Args:
+            category_id: 要移动的分类ID
+            new_parent_id: 目标父分类ID，None 表示移到顶级
+            new_index: 在目标同级列表（不含被移动项）中的插入位置
+            
+        Raises:
+            ValueError: 校验失败时抛出
+        """
+        virtual_ids = {'all', 'favorites'}
+        with self._lock:
+            categories = self._load_categories()
+            by_id = {c['id']: c for c in categories}
+            
+            if category_id not in by_id:
+                raise ValueError("分类不存在")
+            moving = by_id[category_id]
+            if moving.get('is_system', False) or category_id in virtual_ids:
+                raise ValueError("系统分类不能移动")
+            
+            if new_parent_id:
+                if new_parent_id == category_id:
+                    raise ValueError("不能移动到自身分类下")
+                parent = by_id.get(new_parent_id)
+                if not parent:
+                    raise ValueError("目标父分类不存在")
+                if parent.get('is_system', False) or new_parent_id in virtual_ids:
+                    raise ValueError("不能移动到系统分类下")
+                if parent.get('parent_id'):
+                    raise ValueError("只支持两级分类，不能移动到子分类下")
+                if any(c.get('parent_id') == category_id for c in categories):
+                    raise ValueError("该分类下存在子分类，不能移动到其他分类下")
+            
+            siblings = [
+                c for c in categories
+                if c.get('parent_id') == new_parent_id
+                and c['id'] != category_id
+                and not c.get('is_system', False)
+            ]
+            siblings.sort(key=lambda c: c.get('sort_order', 0))
+            index = max(0, min(new_index, len(siblings)))
+            siblings.insert(index, moving)
+            
+            base = 0
+            if new_parent_id is None:
+                system_orders = [
+                    c.get('sort_order', 0) for c in categories
+                    if c.get('parent_id') is None and c.get('is_system', False)
+                ]
+                base = (max(system_orders) + 1) if system_orders else 0
+            
+            for pos, c in enumerate(siblings):
+                c['parent_id'] = new_parent_id
+                c['sort_order'] = base + pos
+            
+            self._save_categories(categories)
+            logger.info(f"移动分类成功: {category_id} -> parent={new_parent_id}, index={index}")
     
     def delete_category(self, category_id: str) -> bool:
         """

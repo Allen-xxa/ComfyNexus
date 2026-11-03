@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { WorkflowSidebar, WorkflowDetailDialog, WorkflowDragLayer, WorkflowSelectionBox, WorkflowBatchToolbar, WorkflowGrid, WorkflowFolderManageDialog, WorkflowSettingsModal } from '@/components/workflow'
+import { WorkflowSidebar, WorkflowDetailDialog, WorkflowDragLayer, WorkflowSelectionBox, WorkflowBatchToolbar, WorkflowGrid, WorkflowSettingsModal } from '@/components/workflow'
 import { DragProvider, useDragContext } from '@/components/workflow/WorkflowDragContext'
 import { useWorkflowStore } from '@/stores/useWorkflowStore'
 import { useEnvStore } from '@/stores/useEnvStore'
@@ -47,7 +47,6 @@ function WorkflowManagePageInner() {
     batchToggleFavorite,
     batchDeleteWorkflows,
     setBatchMode,
-    folders,
     addFolder,
     updateFolder,
     deleteFolder,
@@ -66,7 +65,8 @@ function WorkflowManagePageInner() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [workflowToDelete, setWorkflowToDelete] = useState<Workflow | null>(null)
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false)
-  const [folderManageOpen, setFolderManageOpen] = useState(false)
+  const [folderDeleteOpen, setFolderDeleteOpen] = useState(false)
+  const [pendingFolderDelete, setPendingFolderDelete] = useState<{ id: string; name: string; hasWorkflows: boolean } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   
   const [isSelecting, setIsSelecting] = useState(false)
@@ -290,6 +290,36 @@ function WorkflowManagePageInner() {
     setBatchDeleteConfirmOpen(false)
   }, [selectedWorkflowIds, batchDeleteWorkflows, t])
 
+  const handleCreateFolder = useCallback(async (parentId: string | null, name: string) => {
+    const folder = await addFolder(name, parentId ?? undefined)
+    if (!folder) toast.error(t('workflow.toast.createFolderFailed'))
+    else toast.success(t('workflow.toast.createFolderSuccess'))
+  }, [addFolder, t])
+
+  const handleRenameFolder = useCallback(async (id: string, name: string) => {
+    const ok = await updateFolder(id, { name })
+    if (!ok) toast.error(t('workflow.toast.renameFolderFailed'))
+  }, [updateFolder, t])
+
+  const handleMoveFolder = useCallback(async (id: string, newParentId: string | null) => {
+    const ok = await updateFolder(id, { parentId: newParentId ?? 'root' })
+    if (!ok) toast.error(t('workflow.toast.folderMoveFailed'))
+  }, [updateFolder, t])
+
+  const handleDeleteFolderRequest = useCallback((id: string, name: string, hasWorkflows: boolean) => {
+    setPendingFolderDelete({ id, name, hasWorkflows })
+    setFolderDeleteOpen(true)
+  }, [])
+
+  const handleConfirmDeleteFolder = useCallback(async () => {
+    if (!pendingFolderDelete) return
+    const ok = await deleteFolder(pendingFolderDelete.id, true)
+    if (ok) toast.success(t('workflow.toast.deleteFolderSuccess'))
+    else toast.error(t('workflow.toast.deleteFolderFailed'))
+    setFolderDeleteOpen(false)
+    setPendingFolderDelete(null)
+  }, [pendingFolderDelete, deleteFolder, t])
+
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       <header className="shrink-0 border-b border-border-subtle bg-surface p-4">
@@ -366,7 +396,14 @@ function WorkflowManagePageInner() {
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <WorkflowSidebar className="z-10" dropTargetId={dropTargetId} onOpenFolderManage={() => setFolderManageOpen(true)} />
+        <WorkflowSidebar
+          className="z-10"
+          dropTargetId={dropTargetId}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={handleRenameFolder}
+          onDeleteFolderRequest={handleDeleteFolderRequest}
+          onMoveFolder={handleMoveFolder}
+        />
 
         <div 
           ref={scrollContainerRef}
@@ -460,14 +497,22 @@ function WorkflowManagePageInner() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <WorkflowFolderManageDialog
-        open={folderManageOpen}
-        onOpenChange={setFolderManageOpen}
-        folders={folders}
-        onAddFolder={addFolder}
-        onUpdateFolder={updateFolder}
-        onDeleteFolder={deleteFolder}
-      />
+      <AlertDialog open={folderDeleteOpen} onOpenChange={setFolderDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('workflow.folder.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingFolderDelete?.hasWorkflows
+                ? t('workflow.folder.deleteWithWorkflows', { name: pendingFolderDelete.name })
+                : t('workflow.folder.deleteConfirm', { name: pendingFolderDelete?.name || '' })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteFolder}>{t('common.confirm')}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <WorkflowSettingsModal
         open={settingsOpen}

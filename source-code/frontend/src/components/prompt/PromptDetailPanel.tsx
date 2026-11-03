@@ -33,6 +33,8 @@ interface PromptDetailPanelProps {
   prompt: Prompt | null
   categories: PromptCategory[]
   mode: PromptPanelMode
+  /** 新建态的默认分类 */
+  defaultCategoryId?: string
   onStartCreate: () => void
   onStartEdit: (prompt: Prompt) => void
   onCancelEdit: () => void
@@ -117,6 +119,7 @@ export function PromptDetailPanel({
   prompt,
   categories,
   mode,
+  defaultCategoryId,
   onStartCreate,
   onStartEdit,
   onCancelEdit,
@@ -155,7 +158,7 @@ export function PromptDetailPanel({
   if (mode === 'create' || mode === 'edit') {
     return (
       <div className="flex h-full flex-col bg-surface">
-        <header className="flex flex-shrink-0 items-center gap-2 border-b border-border-subtle px-5 py-3">
+        <header className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-5 py-3">
           <h2 className="text-sm font-semibold text-foreground">
             {mode === 'create' ? t('prompt.editor.addTitle') : t('prompt.editor.editTitle')}
           </h2>
@@ -164,6 +167,7 @@ export function PromptDetailPanel({
           <PromptInlineEditor
             initial={mode === 'edit' ? prompt : null}
             categories={categories}
+            defaultCategoryId={defaultCategoryId}
             onSave={onSave}
             onCancel={onCancelEdit}
           />
@@ -214,8 +218,8 @@ export function PromptDetailPanel({
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <header className="flex flex-shrink-0 items-start gap-4 border-b border-border-subtle px-5 py-4">
-        <div className="relative size-20 flex-shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-muted">
+      <header className="flex shrink-0 items-start gap-4 border-b border-border-subtle px-5 py-4">
+        <div className="relative size-20 shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-muted">
           {prompt.previewImage ? (
             <img
               src={prompt.previewImage}
@@ -240,11 +244,11 @@ export function PromptDetailPanel({
             <h2 className="min-w-0 flex-1 break-words text-base font-semibold text-foreground">
               {prompt.name}
             </h2>
-            <div className="flex flex-shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0"
+                className="size-7 p-0"
                 title={t('prompt.detail.favorite')}
                 onClick={() => onToggleFavorite(prompt.id)}
               >
@@ -258,7 +262,7 @@ export function PromptDetailPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0"
+                className="size-7 p-0"
                 title={t('prompt.detail.edit')}
                 onClick={() => onStartEdit(prompt)}
               >
@@ -267,7 +271,7 @@ export function PromptDetailPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0 hover:bg-danger/10"
+                className="size-7 p-0 hover:bg-danger/10"
                 title={t('prompt.detail.delete')}
                 onClick={() => onDelete(prompt)}
               >

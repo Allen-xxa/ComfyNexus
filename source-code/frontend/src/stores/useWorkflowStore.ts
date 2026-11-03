@@ -53,8 +53,9 @@ interface WorkflowStore {
   setFilterType: (type: 'all' | 'favorites' | 'folder') => void
   setSelectedFolderId: (folderId: string | null) => void
   addFolder: (name: string, parentId?: string) => Promise<WorkflowFolder | null>
-  deleteFolder: (id: string) => Promise<void>
-  updateFolder: (id: string, updates: Partial<WorkflowFolder>) => Promise<void>
+  deleteFolder: (id: string, moveContentsToRoot?: boolean) => Promise<boolean>
+  updateFolder: (id: string, updates: Partial<WorkflowFolder>) => Promise<boolean>
+  reloadAfterFolderChange: () => Promise<void>
   moveWorkflowToFolder: (workflowId: string, folderId: string | null) => Promise<void>
   setActiveFilterTag: (tagId: string) => void
 
@@ -166,38 +167,44 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     })
   },
 
+  // 文件夹增删改后从磁盘重载：文件夹 ID 由相对路径派生，重命名/移动会连带改变
+  // 子级文件夹与其内工作流的路径，只有重新扫描才能反映真实结构。
+  // 这里静默重载（不置 isLoading），避免每次操作都闪一次加载态。
+  reloadAfterFolderChange: async () => {
+    const [workflows, folders] = await Promise.all([
+      workflowApi.getWorkflows(),
+      workflowApi.getFolders()
+    ])
+    set({ workflows, folders, filterTags: extractFilterTags(workflows) })
+  },
+
   addFolder: async (name, parentId) => {
     const folder = await workflowApi.createFolder(name, parentId)
     if (folder) {
-      set((state) => ({
-        folders: [...state.folders, folder]
-      }))
+      await get().reloadAfterFolderChange()
     }
     return folder
   },
 
-  deleteFolder: async (id) => {
-    const success = await workflowApi.deleteFolder(id)
+  deleteFolder: async (id, moveContentsToRoot = false) => {
+    const success = await workflowApi.deleteFolder(id, moveContentsToRoot)
     if (success) {
-      set((state) => ({
-        folders: state.folders.filter((f) => f.id !== id),
-        selectedFolderId: state.selectedFolderId === id ? null : state.selectedFolderId,
-        workflows: state.workflows.map((w) =>
-          w.folderId === id ? { ...w, folderId: null } : w
-        )
-      }))
+      await get().reloadAfterFolderChange()
+      const { selectedFolderId } = get()
+      if (selectedFolderId === id) {
+        set({ selectedFolderId: null, filterType: 'all' })
+      }
     }
+    return success
   },
 
   updateFolder: async (id, updates) => {
     const updated = await workflowApi.updateFolder(id, updates)
     if (updated) {
-      set((state) => ({
-        folders: state.folders.map((f) =>
-          f.id === id ? updated : f
-        )
-      }))
+      await get().reloadAfterFolderChange()
+      return true
     }
+    return false
   },
 
   moveWorkflowToFolder: async (workflowId, folderId) => {
@@ -279,7 +286,12 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     if (filterType === 'favorites') {
       filtered = filtered.filter((w) => w?.isFavorite)
     } else if (filterType === 'folder' && selectedFolderId) {
-      filtered = filtered.filter((w) => w?.folderId === selectedFolderId)
+      // 选中文件夹时包含其所有子文件夹内的工作流。
+      // 文件夹 ID 基于相对路径（"folder:a/b"），子级 ID 一定是父级 ID 加 "/" 前缀。
+      const prefix = `${selectedFolderId}/`
+      filtered = filtered.filter(
+        (w) => w?.folderId === selectedFolderId || (w?.folderId && w.folderId.startsWith(prefix))
+      )
     }
 
     if (activeFilterTag !== 'all') {

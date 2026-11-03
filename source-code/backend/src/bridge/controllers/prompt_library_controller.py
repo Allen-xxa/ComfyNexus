@@ -506,6 +506,43 @@ class PromptLibraryController:
                 "error_message": str(e)
             }
     
+    def category_move(
+        self,
+        category_id: str,
+        parent_id: str = None,
+        index: int = 0
+    ) -> Dict[str, Any]:
+        """
+        移动分类（换父级和/或排序）
+        
+        Args:
+            category_id: 分类ID
+            parent_id: 目标父分类ID，None 表示顶级
+            index: 目标同级中的插入位置
+            
+        Returns:
+            {
+                "success": bool,
+                "error_message": str  # 仅在失败时
+            }
+        """
+        try:
+            logger.info(f"移动分类: {category_id} -> parent={parent_id}, index={index}")
+            self.service.move_category(category_id, parent_id, int(index))
+            return {"success": True}
+        except ValueError as e:
+            logger.warning(f"移动分类验证失败: {e}")
+            return {
+                "success": False,
+                "error_message": str(e)
+            }
+        except Exception as e:
+            logger.error(f"移动分类失败: {e}")
+            return {
+                "success": False,
+                "error_message": str(e)
+            }
+    
     def category_delete(self, category_id: str) -> Dict[str, Any]:
         """
         删除分类

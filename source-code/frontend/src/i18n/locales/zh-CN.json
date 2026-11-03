@@ -31,6 +31,11 @@
     "clearCache": "清除缓存",
     "clearing": "清除中...",
     "aiAnalyze": "AI 分析",
+    "sidebar": {
+      "expand": "展开侧边栏",
+      "collapse": "折叠侧边栏",
+      "resetHint": "拖动调整宽度，双击恢复默认"
+    },
     "copyAll": "复制全部",
     "export": "导出",
     "import": "导入",
@@ -2168,14 +2173,17 @@
       "confirmDisableGlobal": "关闭全局工作流目录后，各环境将回退到各自的工作流目录和元数据。全局元数据文件将保留不删除。确认关闭？",
       "confirmPathChange": "修改工作流目录后，旧目录中的标签、收藏等元数据不会自动迁移。确认修改？"
     },
-    "folderManage": {
-      "title": "文件夹管理",
-      "parentFolder": "父级文件夹",
-      "folderName": "文件夹名称",
-      "folderNamePlaceholder": "输入文件夹名称",
-      "topLevel": "顶级目录",
-      "addRow": "添加文件夹",
-      "save": "保存"
+    "folder": {
+      "namePlaceholder": "输入文件夹名称",
+      "actions": "文件夹操作",
+      "newRoot": "新建文件夹",
+      "newChild": "新建子文件夹",
+      "rename": "重命名",
+      "moveToRoot": "移到根目录",
+      "delete": "删除",
+      "deleteTitle": "删除文件夹",
+      "deleteConfirm": "确定要删除文件夹「{name}」吗？",
+      "deleteWithWorkflows": "文件夹「{name}」内还有工作流。删除后其中的工作流会被移动到根目录（不会删除工作流本身）。确认删除？"
     },
     "node": {
       "noPorts": "无端口连接"
@@ -2199,6 +2207,10 @@
       "exportFailed": "导出工作流失败",
       "createFolderSuccess": "文件夹创建成功",
       "createFolderFailed": "创建文件夹失败",
+      "renameFolderFailed": "重命名文件夹失败",
+      "folderMoveFailed": "移动文件夹失败",
+      "deleteFolderSuccess": "文件夹已删除",
+      "deleteFolderFailed": "删除文件夹失败",
       "favoriteSuccess": "已收藏 {count} 个工作流",
       "favoriteFailed": "收藏失败",
       "moveSuccess": "已移动 {count} 个工作流",
@@ -2337,15 +2349,15 @@
     },
     "category": {
       "title": "我的提示词库",
-      "manage": "管理分类目录",
       "all": "全部",
       "favorites": "收藏",
-      "manageTitle": "分类目录管理",
-      "parentCategory": "父级分类",
-      "categoryName": "分类名称",
-      "topLevel": "-- 顶级分类 --",
-      "addRow": "新增分类行",
-      "save": "保存并应用"
+      "actions": "分类操作",
+      "newRoot": "新建分类",
+      "newChild": "新建子分类",
+      "newPrompt": "在此新建提示词",
+      "rename": "重命名",
+      "delete": "删除分类",
+      "namePlaceholder": "输入分类名称，回车确认"
     },
     "toast": {
       "createSuccess": "配方已添加",
@@ -2370,6 +2382,7 @@
       "categoryAddFailed": "添加分类失败",
       "categoryUpdateSuccess": "分类已更新",
       "categoryUpdateFailed": "更新分类失败",
+      "categoryMoveFailed": "移动分类失败",
       "categoryDeleteSuccess": "分类已删除",
       "categoryDeleteFailed": "删除分类失败",
       "imageUploadSuccess": "图片上传成功",
@@ -2384,6 +2397,8 @@
       "deleteDescription": "确定要删除配方「{name}」吗？此操作无法撤销。",
       "batchDeleteTitle": "确认批量删除",
       "batchDeleteDescription": "确定要删除选中的 {count} 个配方吗？此操作无法撤销。",
+      "deleteCategoryTitle": "确认删除分类",
+      "deleteCategoryDescription": "确定要删除分类「{name}」吗？分类下若有子分类或提示词需先移出。",
       "confirmButton": "删除"
     },
     "loading": "加载中..."
@@ -4428,6 +4443,11 @@
       "extraLarge": "超大图"
     },
     "ratingFilter": "星级筛选",
+    "sortOptions": {
+      "createdAt": "最新创建",
+      "name": "名称",
+      "size": "文件大小"
+    },
     "rating": {
       "allRatings": "全部星级",
       "unrated": "未评分",
@@ -4481,7 +4501,20 @@
     "categoryTitle": "分类",
     "manageCategory": "管理分类目录",
     "noAssets": "暂无资源",
-    "showFolders": "显示目录",
+    "showFolders": "分层浏览",
+    "viewModes": {
+      "masonry": "瀑布流",
+      "grid": "网格卡片"
+    },
+    "theater": {
+      "enter": "影院模式查看",
+      "exit": "退出影院模式",
+      "exitHint": "按 Esc 返回列表",
+      "noPrompt": "未解析到提示词",
+      "filmstrip": "筛选结果",
+      "position": "{{current}} / {{total}}"
+    },
+    "showFoldersHint": "开启：子目录以文件夹卡片呈现，需点击进入，列表只显示当前目录直属的资产。关闭：平铺展示所选目录及其所有子目录的全部资产。",
     "folder": {
       "open": "打开目录"
     },
@@ -4570,7 +4603,10 @@
       "tagPlaceholder": "输入标签后按回车",
       "descriptionPlaceholder": "输入备注...",
       "pin": "固定到侧边",
-      "unpin": "取消固定"
+      "unpin": "取消固定",
+      "category": "所在目录",
+      "path": "文件路径",
+      "openLocation": "打开所在目录"
     },
     "confirm": {
       "deleteTitle": "确认删除",

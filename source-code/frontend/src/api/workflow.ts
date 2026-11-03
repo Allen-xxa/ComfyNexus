@@ -1,7 +1,10 @@
 import type { Workflow, WorkflowFolder, WorkflowInfoUpdate } from '@/types/workflow'
 
 function getAPI() {
+  // PyWebViewAPI 声明未覆盖本文件用到的 workflow_* 方法，只能按宽松句柄取用
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (typeof window !== 'undefined' && (window as any).pywebview) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (window as any).pywebview.api
   }
   return null
@@ -297,14 +300,14 @@ export const workflowApi = {
     }
   },
 
-  deleteFolder: async (id: string): Promise<boolean> => {
+  deleteFolder: async (id: string, moveContentsToRoot = false): Promise<boolean> => {
     const api = getAPI()
     if (!api) {
       console.warn('pywebview API 不可用')
       return false
     }
     try {
-      const result = await api.delete_workflow_folder(id)
+      const result = await api.delete_workflow_folder(id, moveContentsToRoot)
       return result?.success ?? false
     } catch (error) {
       console.error('删除文件夹异常:', error)

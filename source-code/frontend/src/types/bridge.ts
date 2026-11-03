@@ -2,6 +2,9 @@
  * PyWebView Bridge API 类型定义
  */
 
+// 桥契约的载荷由后端 JSON 决定，尚未逐字段收口的地方先用 any 放行；补全后移除本行豁免。
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import type { ModuleConfigData } from './module'
 import type { 
   EnvironmentConfig,
@@ -1220,6 +1223,15 @@ export interface PyWebViewAPI {
     error_message?: string
   }>;
 
+  category_move: (
+    category_id: string,
+    parent_id?: string | null,
+    index?: number
+  ) => Promise<{
+    success: boolean
+    error_message?: string
+  }>;
+
   category_delete: (category_id: string) => Promise<{
     success: boolean
     error_message?: string
@@ -1364,7 +1376,7 @@ export interface PyWebViewAPI {
     error?: string
   }>;
 
-  delete_workflow_folder: (folderId: string) => Promise<{
+  delete_workflow_folder: (folderId: string, moveContentsToRoot?: boolean) => Promise<{
     success: boolean
     error?: string
   }>;

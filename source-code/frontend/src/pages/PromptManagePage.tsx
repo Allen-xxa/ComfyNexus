@@ -14,7 +14,6 @@ import {
   PromptGrid,
   PromptListRow,
   PromptDetailPanel,
-  CategoryManageDialog,
   DragProvider,
   PromptDragLayer,
   PromptSelectionBox,
@@ -22,13 +21,13 @@ import {
 } from '@/components/prompt'
 import type { PromptPanelMode } from '@/components/prompt/PromptDetailPanel'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { Button } from '@/components/ui/Button'
 import type { PromptGridRef } from '@/components/prompt/PromptGrid'
 import { cn } from '@/lib/utils'
 import {
   usePromptStore,
   type Prompt,
-  type PromptInput,
-  type CategoryInput
+  type PromptInput
 } from '@/stores/usePromptStore'
 import { useTranslation } from 'react-i18next'
 
@@ -59,6 +58,7 @@ export default function PromptManagePage() {
     movePromptsToCategory,
     createCategory,
     updateCategory,
+    moveCategory,
     deleteCategory,
     exportPrompts,
     importPrompts,
@@ -68,7 +68,6 @@ export default function PromptManagePage() {
     setSelectedPromptIds
   } = usePromptStore()
 
-  const [showCategoryManage, setShowCategoryManage] = useState(false)
   const [activePromptId, setActivePromptId] = useState<string | null>(null)
   const [panelMode, setPanelMode] = useState<PromptPanelMode>('view')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -76,6 +75,9 @@ export default function PromptManagePage() {
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteName, setPendingDeleteName] = useState<string>('')
+  const [categoryDeleteConfirmOpen, setCategoryDeleteConfirmOpen] = useState(false)
+  const [pendingDeleteCategoryId, setPendingDeleteCategoryId] = useState<string | null>(null)
+  const [pendingDeleteCategoryName, setPendingDeleteCategoryName] = useState<string>('')
   const [sortBy, setSortBy] = useState<'name' | 'created_at' | 'updated_at' | 'usage_count'>('updated_at')
 
   const [isSelecting, setIsSelecting] = useState(false)
@@ -271,33 +273,63 @@ export default function PromptManagePage() {
     }
   }, [movePromptsToCategory, toggleFavorite, categories, findCategoryById, t])
 
-  const handleAddCategory = useCallback(async (data: CategoryInput) => {
-    const newCategory = await createCategory(data)
+  const handleCreateCategory = useCallback(async (parentId: string | null, name: string) => {
+    const newCategory = await createCategory({
+      name,
+      icon: parentId ? 'file-text' : 'folder',
+      parentId
+    })
     if (newCategory) {
       toast.success(t('prompt.toast.categoryAddSuccess'))
     } else {
-      toast.error(t('prompt.toast.categoryAddFailed'))
+      const error = usePromptStore.getState().error
+      toast.error(error || t('prompt.toast.categoryAddFailed'))
     }
   }, [createCategory, t])
 
-  const handleUpdateCategory = useCallback(async (id: string, data: Partial<CategoryInput>) => {
-    const success = await updateCategory(id, data)
+  const handleRenameCategory = useCallback(async (id: string, name: string) => {
+    const success = await updateCategory(id, { name })
     if (success) {
       toast.success(t('prompt.toast.categoryUpdateSuccess'))
     } else {
-      toast.error(t('prompt.toast.categoryUpdateFailed'))
+      const error = usePromptStore.getState().error
+      toast.error(error || t('prompt.toast.categoryUpdateFailed'))
     }
   }, [updateCategory, t])
 
-  const handleDeleteCategory = useCallback(async (id: string) => {
-    const success = await deleteCategory(id)
+  const handleMoveCategory = useCallback(async (id: string, parentId: string | null, index: number) => {
+    const success = await moveCategory(id, parentId, index)
+    if (!success) {
+      const error = usePromptStore.getState().error
+      toast.error(error || t('prompt.toast.categoryMoveFailed'))
+    }
+  }, [moveCategory, t])
+
+  const handleCreatePromptInCategory = useCallback((categoryId: string) => {
+    setSelectedCategoryId(categoryId)
+    setPanelMode('create')
+  }, [setSelectedCategoryId])
+
+  const handleDeleteCategoryRequest = useCallback((id: string, name: string) => {
+    setPendingDeleteCategoryId(id)
+    setPendingDeleteCategoryName(name)
+    setCategoryDeleteConfirmOpen(true)
+  }, [])
+
+  const handleConfirmDeleteCategory = useCallback(async () => {
+    if (!pendingDeleteCategoryId) return
+
+    const success = await deleteCategory(pendingDeleteCategoryId)
     if (success) {
       toast.success(t('prompt.toast.categoryDeleteSuccess'))
     } else {
       const error = usePromptStore.getState().error
       toast.error(error || t('prompt.toast.categoryDeleteFailed'))
     }
-  }, [deleteCategory, t])
+    setCategoryDeleteConfirmOpen(false)
+    setPendingDeleteCategoryId(null)
+    setPendingDeleteCategoryName('')
+  }, [pendingDeleteCategoryId, deleteCategory, t])
 
   const handleExport = useCallback(async () => {
     const result = await exportPrompts()
@@ -426,7 +458,7 @@ export default function PromptManagePage() {
   return (
     <DragProvider onDrop={handleDropToCategory}>
       <div className="flex h-full flex-col">
-        <header className="flex-shrink-0 border-b border-border-subtle bg-surface p-4">
+        <header className="shrink-0 border-b border-border-subtle bg-surface p-4">
           <PromptToolbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -446,12 +478,16 @@ export default function PromptManagePage() {
         </header>
 
         <main className="flex min-h-0 flex-1 overflow-hidden">
-          <aside className="w-52 flex-shrink-0 border-r border-border-subtle bg-surface">
+          <aside className="w-52 shrink-0 border-r border-border-subtle bg-surface">
             <PromptCategoryTree
               categories={categories}
               selectedCategoryId={selectedCategoryId}
               onSelectCategory={setSelectedCategoryId}
-              onOpenCategoryManage={() => setShowCategoryManage(true)}
+              onCreateCategory={handleCreateCategory}
+              onRenameCategory={handleRenameCategory}
+              onDeleteCategory={handleDeleteCategoryRequest}
+              onCreatePromptInCategory={handleCreatePromptInCategory}
+              onMoveCategory={handleMoveCategory}
             />
           </aside>
 
@@ -461,15 +497,17 @@ export default function PromptManagePage() {
               viewMode === 'grid' ? 'w-[440px]' : 'w-[336px]'
             )}
           >
-            <div className="flex flex-shrink-0 items-center justify-between border-b border-border-subtle px-3 py-1.5">
+            <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-3 py-1.5">
               <span className="text-[11px] text-muted-foreground">
                 {t('prompt.toolbar.totalPrompts', { count: filteredPrompts.length })}
               </span>
               <div className="flex items-center gap-0.5">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
                   className={cn(
-                    'rounded p-1 transition-colors',
+                    'size-7 rounded p-1 transition-colors',
                     viewMode === 'list'
                       ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:bg-muted'
@@ -478,11 +516,13 @@ export default function PromptManagePage() {
                   onClick={() => setViewMode('list')}
                 >
                   <ListIcon className="size-3.5" />
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
                   className={cn(
-                    'rounded p-1 transition-colors',
+                    'size-7 rounded p-1 transition-colors',
                     viewMode === 'grid'
                       ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:bg-muted'
@@ -491,7 +531,7 @@ export default function PromptManagePage() {
                   onClick={() => setViewMode('grid')}
                 >
                   <LayoutGrid className="size-3.5" />
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -547,6 +587,7 @@ export default function PromptManagePage() {
               prompt={activePrompt}
               categories={categories}
               mode={panelMode}
+              defaultCategoryId={selectedCategoryId}
               onStartCreate={handleStartCreate}
               onStartEdit={handleStartEdit}
               onCancelEdit={handleCancelEdit}
@@ -557,15 +598,6 @@ export default function PromptManagePage() {
             />
           </section>
         </main>
-
-        <CategoryManageDialog
-          open={showCategoryManage}
-          onOpenChange={setShowCategoryManage}
-          categories={categories}
-          onAddCategory={handleAddCategory}
-          onUpdateCategory={handleUpdateCategory}
-          onDeleteCategory={handleDeleteCategory}
-        />
 
         <PromptDragLayer getCardRefs={() => gridRef.current?.getCardRefs() ?? new Map()} />
 
@@ -594,6 +626,16 @@ export default function PromptManagePage() {
           confirmText={t('prompt.confirm.confirmButton')}
           variant="destructive"
           onConfirm={handleBatchDeleteConfirm}
+        />
+
+        <ConfirmDialog
+          open={categoryDeleteConfirmOpen}
+          onOpenChange={setCategoryDeleteConfirmOpen}
+          title={t('prompt.confirm.deleteCategoryTitle')}
+          description={t('prompt.confirm.deleteCategoryDescription', { name: pendingDeleteCategoryName })}
+          confirmText={t('prompt.confirm.confirmButton')}
+          variant="destructive"
+          onConfirm={handleConfirmDeleteCategory}
         />
 
         <PromptBatchToolbar

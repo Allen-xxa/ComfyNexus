@@ -31,6 +31,11 @@
     "clearCache": "Clear Cache",
     "clearing": "Clearing...",
     "aiAnalyze": "AI Analyze",
+    "sidebar": {
+      "expand": "Expand sidebar",
+      "collapse": "Collapse sidebar",
+      "resetHint": "Drag to resize, double-click to reset"
+    },
     "copyAll": "Copy All",
     "export": "Export",
     "import": "Import",
@@ -2066,14 +2071,17 @@
       "confirmDisableGlobal": "Disabling global workflow directory will revert each environment to its own workflow directory and metadata. Global metadata file will be preserved. Confirm?",
       "confirmPathChange": "After changing the workflow directory, tags, favorites and other metadata will not be automatically migrated. Confirm?"
     },
-    "folderManage": {
-      "title": "Folder Management",
-      "parentFolder": "Parent Folder",
-      "folderName": "Folder Name",
-      "folderNamePlaceholder": "Enter folder name",
-      "topLevel": "Top Level",
-      "addRow": "Add Folder",
-      "save": "Save"
+    "folder": {
+      "namePlaceholder": "Enter folder name",
+      "actions": "Folder actions",
+      "newRoot": "New Folder",
+      "newChild": "New Subfolder",
+      "rename": "Rename",
+      "moveToRoot": "Move to Root",
+      "delete": "Delete",
+      "deleteTitle": "Delete Folder",
+      "deleteConfirm": "Delete folder \"{name}\"?",
+      "deleteWithWorkflows": "Folder \"{name}\" still contains workflows. Deleting it will move those workflows to the root (the workflows themselves are not deleted). Confirm delete?"
     },
     "node": {
       "noPorts": "No port connections"
@@ -2087,6 +2095,10 @@
       "exportFailed": "Failed to export workflow",
       "createFolderSuccess": "Folder created successfully",
       "createFolderFailed": "Failed to create folder",
+      "renameFolderFailed": "Failed to rename folder",
+      "folderMoveFailed": "Failed to move folder",
+      "deleteFolderSuccess": "Folder deleted",
+      "deleteFolderFailed": "Failed to delete folder",
       "favoriteSuccess": "{count} workflows favorited",
       "favoriteFailed": "Failed to favorite",
       "moveSuccess": "{count} workflows moved",
@@ -2236,15 +2248,15 @@
     },
     "category": {
       "title": "My Prompt Library",
-      "manage": "Manage Categories",
       "all": "All",
       "favorites": "Favorites",
-      "manageTitle": "Category Management",
-      "parentCategory": "Parent Category",
-      "categoryName": "Category Name",
-      "topLevel": "-- Top Level --",
-      "addRow": "Add Category Row",
-      "save": "Save & Apply"
+      "actions": "Category actions",
+      "newRoot": "New Category",
+      "newChild": "New Subcategory",
+      "newPrompt": "New Prompt Here",
+      "rename": "Rename",
+      "delete": "Delete Category",
+      "namePlaceholder": "Enter name, press Enter to confirm"
     },
     "toast": {
       "createSuccess": "Recipe added",
@@ -2268,6 +2280,7 @@
       "categoryAddFailed": "Failed to add category",
       "categoryUpdateSuccess": "Category updated",
       "categoryUpdateFailed": "Failed to update category",
+      "categoryMoveFailed": "Failed to move category",
       "categoryDeleteSuccess": "Category deleted",
       "categoryDeleteFailed": "Failed to delete category",
       "imageUploadSuccess": "Image uploaded",
@@ -2282,6 +2295,8 @@
       "deleteDescription": "Are you sure you want to delete recipe \"{name}\"? This action cannot be undone.",
       "batchDeleteTitle": "Confirm Batch Delete",
       "batchDeleteDescription": "Are you sure you want to delete {count} selected recipes? This action cannot be undone.",
+      "deleteCategoryTitle": "Confirm Delete Category",
+      "deleteCategoryDescription": "Are you sure you want to delete category \"{name}\"? Move its subcategories or prompts out first.",
       "confirmButton": "Delete"
     },
     "loading": "Loading..."
@@ -3854,6 +3869,11 @@
       "extraLarge": "Extra Large"
     },
     "ratingFilter": "Rating Filter",
+    "sortOptions": {
+      "createdAt": "Newest First",
+      "name": "Name",
+      "size": "File Size"
+    },
     "rating": {
       "allRatings": "All Ratings",
       "unrated": "Unrated",
@@ -3886,7 +3906,20 @@
     "categoryTitle": "Categories",
     "manageCategory": "Manage Categories",
     "noAssets": "No assets",
-    "showFolders": "Show Folders",
+    "showFolders": "Nested View",
+    "viewModes": {
+      "masonry": "Masonry",
+      "grid": "Grid Cards"
+    },
+    "theater": {
+      "enter": "View in theater mode",
+      "exit": "Exit theater mode",
+      "exitHint": "Press Esc to return to the list",
+      "noPrompt": "No prompt detected",
+      "filmstrip": "Filtered results",
+      "position": "{{current}} / {{total}}"
+    },
+    "showFoldersHint": "On: sub-folders appear as folder cards you click to enter, and the list shows only the assets directly in the current folder. Off: flatten and show every asset in the selected folder and all of its sub-folders.",
     "folder": {
       "open": "Open folder"
     },
@@ -3975,7 +4008,10 @@
       "tagPlaceholder": "Type tag and press Enter",
       "descriptionPlaceholder": "Enter description...",
       "pin": "Pin to sidebar",
-      "unpin": "Unpin"
+      "unpin": "Unpin",
+      "category": "Folder",
+      "path": "File Path",
+      "openLocation": "Open Containing Folder"
     },
     "confirm": {
       "deleteTitle": "Confirm Delete",
