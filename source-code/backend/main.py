@@ -661,11 +661,10 @@ def main():
     # 从已读取的配置中解析窗口大小（避免重复读取配置文件）
     default_width, default_height = 1680, 1080
     if settings_data:
-        logger.info(f"[窗口大小] settings_data 内容: {settings_data}")
-        appearance_config = settings_data.get("appearance", {})
-        logger.info(f"[窗口大小] appearance 配置: {appearance_config}")
-        window_size = appearance_config.get("windowSize", "1680x1080")
-        logger.info(f"[窗口大小] 读取到的 windowSize: {window_size}")
+        window_size = settings_data.get("appearance", {}).get("windowSize", "1680x1080")
+        # 只打印真正用到的这一项：整份 settings_data 含 github.apiToken 等凭据，
+        # 打进启动日志等于把明文密钥落盘（日志默认保留 30 天）。
+        logger.debug(f"[窗口大小] windowSize={window_size}")
         try:
             width_str, height_str = window_size.split("x")
             default_width = int(width_str)
