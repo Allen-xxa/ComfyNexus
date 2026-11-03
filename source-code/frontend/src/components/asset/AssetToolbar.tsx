@@ -4,14 +4,16 @@
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, Upload, Download, CheckSquare, Settings, RefreshCw, Loader2, Eye, Star, ChevronDown, FolderTree } from 'lucide-react'
+import { Search, Upload, Download, CheckSquare, Settings, RefreshCw, Loader2, Eye, Star, ChevronDown, FolderTree, ArrowUpDown, Columns3, LayoutGrid } from 'lucide-react'
 import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider, Switch } from '@/components/ui'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { useAssetStore } from '@/stores/useAssetStore'
+import { useAssetStore, type SortBy } from '@/stores/useAssetStore'
 import { cn } from '@/lib/utils'
 
 interface AssetToolbarProps {
   onOpenSettings?: () => void
+  /** 影院模式下隐藏排布相关控件，退出后再显示 */
+  hideLayoutControls?: boolean
 }
 
 const RATING_FILTERS = [
@@ -24,7 +26,13 @@ const RATING_FILTERS = [
   { value: '5', label: '5stars' }
 ] as const
 
-export function AssetToolbar({ onOpenSettings }: AssetToolbarProps) {
+const SORT_OPTIONS = [
+  { value: 'createdAt', label: 'createdAt' },
+  { value: 'name', label: 'name' },
+  { value: 'size', label: 'size' }
+] as const
+
+export function AssetToolbar({ onOpenSettings, hideLayoutControls }: AssetToolbarProps) {
   const { t } = useTranslation()
   const {
     searchQuery,
@@ -45,8 +53,12 @@ export function AssetToolbar({ onOpenSettings }: AssetToolbarProps) {
     setThumbnailSize,
     ratingFilter,
     setRatingFilter,
+    sortBy,
+    setSortBy,
     showFoldersInList,
-    setShowFoldersInList
+    setShowFoldersInList,
+    viewMode,
+    setViewMode
   } = useAssetStore()
 
   const [isImporting, setIsImporting] = useState(false)
@@ -119,8 +131,43 @@ export function AssetToolbar({ onOpenSettings }: AssetToolbarProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 rounded-md border border-border-subtle bg-surface-active px-2.5 py-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {!hideLayoutControls && (
+            <div className="flex items-center gap-0.5 rounded-md border border-border-subtle bg-surface-active p-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setViewMode('masonry')}
+              title={t('asset.viewModes.masonry')}
+              className={cn(
+                'size-7',
+                viewMode === 'masonry'
+                  ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Columns3 className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setViewMode('grid')}
+              title={t('asset.viewModes.grid')}
+              className={cn(
+                'size-7',
+                viewMode === 'grid'
+                  ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <LayoutGrid className="size-4" />
+            </Button>
+          </div>
+          )}
+          <div
+            className="flex items-center gap-2 rounded-md border border-border-subtle bg-surface-active px-2.5 py-1.5"
+            title={t('asset.showFoldersHint')}
+          >
             <FolderTree className="size-4 text-muted-foreground" />
             <Label htmlFor="asset-show-folders" className="cursor-pointer text-xs text-muted-foreground">
               {t('asset.showFolders')}
@@ -132,20 +179,38 @@ export function AssetToolbar({ onOpenSettings }: AssetToolbarProps) {
               aria-label={t('asset.showFolders')}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Eye className="size-4 text-muted-foreground" />
-            <Slider
-              value={[thumbnailSize]}
-              onValueChange={(value) => setThumbnailSize(value[0])}
-              min={100}
-              max={500}
-              step={10}
-              className="w-24"
-            />
-            <span className="w-12 text-xs text-muted-foreground">
-              {t('asset.thumbnailSizeValue', { size: thumbnailSize })}
-            </span>
-          </div>
+          {!hideLayoutControls && (
+            <div className="flex items-center gap-2">
+              <Eye className="size-4 text-muted-foreground" />
+              <Slider
+                value={[thumbnailSize]}
+                onValueChange={(value) => setThumbnailSize(value[0])}
+                min={100}
+                max={500}
+                step={10}
+                className="w-24"
+              />
+              <span className="w-12 text-xs text-muted-foreground">
+                {t('asset.thumbnailSizeValue', { size: thumbnailSize })}
+              </span>
+            </div>
+          )}
+          <Select
+            value={sortBy}
+            onValueChange={(value) => setSortBy(value as SortBy)}
+          >
+            <SelectTrigger className="h-8 w-auto gap-1 px-3">
+              <ArrowUpDown className="size-4" />
+              <SelectValue placeholder={t('asset.sort')} />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {t(`asset.sortOptions.${option.label}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select
             value={ratingFilter}
             onValueChange={(value) => setRatingFilter(value)}

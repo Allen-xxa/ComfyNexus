@@ -18,15 +18,9 @@ interface AssetFolderCardProps {
 export function AssetFolderCard({ category, assetCount, onOpen }: AssetFolderCardProps) {
   const { t } = useTranslation()
 
-  let isDragging = false
-  let isDropTarget = false
-  try {
-    const dragContext = useAssetDragContext()
-    isDragging = dragContext.isDragging
-    isDropTarget = dragContext.dropTargetId === category.id
-  } catch {
-    // 不在 DragProvider 内部时忽略
-  }
+  const dragContext = useAssetDragContext()
+  const isDragging = dragContext?.isDragging ?? false
+  const isDropTarget = dragContext?.dropTargetId === category.id
 
   const handleClick = useCallback(() => {
     if (isDragging) return

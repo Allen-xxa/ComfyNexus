@@ -4,7 +4,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pencil, Check, X, XCircle, Calendar, HardDrive, Image, FileVideo, Star, Pin, Trash2 } from 'lucide-react'
+import { Pencil, Check, X, XCircle, Calendar, HardDrive, Image, FileVideo, Star, Pin, Trash2, FolderTree, FileText, FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
@@ -12,13 +12,17 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import type { Asset } from '@/mocks/asset'
 
-interface AssetInfoPanelProps {
+export interface AssetInfoPanelProps {
   asset: Asset | null
   onClose: () => void
   onUpdate: (assetId: string, data: { filename?: string; description?: string; tags?: string[]; rating?: number }) => Promise<{ success: boolean; error_message?: string }>
   pinned?: boolean
   onTogglePin?: () => void
   onDelete?: (assetId: string) => Promise<boolean>
+  categoryPath?: string
+  onOpenLocation?: (assetId: string) => Promise<boolean>
+  /** 嵌入模式：由外层负责滚动，不渲染自己的标题栏和预览图（影院模式右侧详情用） */
+  embedded?: boolean
 }
 
 function formatFileSize(bytes: number): string {
@@ -53,7 +57,7 @@ function getFilenameWithoutExt(filename: string): string {
   return lastDot > 0 ? filename.substring(0, lastDot) : filename
 }
 
-export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, onDelete }: AssetInfoPanelProps) {
+export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, onDelete, categoryPath, onOpenLocation, embedded }: AssetInfoPanelProps) {
   const { t } = useTranslation()
   const [isEditMode, setIsEditMode] = useState(false)
   const [editFilename, setEditFilename] = useState('')
@@ -146,40 +150,46 @@ export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, 
 
   return (
     <div className={cn(
-      "flex h-full flex-col border-l border-border-subtle",
-      pinned ? "bg-surface" : "bg-surface/95 backdrop-blur-sm"
+      "flex flex-col border-l border-border-subtle",
+      embedded
+        ? "border-t bg-surface"
+        : cn("h-full", pinned ? "bg-surface" : "bg-surface/95 backdrop-blur-sm")
     )}>
-      <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-        <span className="text-sm font-medium text-foreground">{t('asset.info.title')}</span>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onTogglePin}
-            className="size-7"
-            title={pinned ? t('asset.info.unpin') : t('asset.info.pin')}
-          >
-            <Pin className={cn("size-4", pinned && "fill-current text-primary")} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="size-7"
-          >
-            <XCircle className="size-4" />
-          </Button>
+      {!embedded && (
+        <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+          <span className="text-sm font-medium text-foreground">{t('asset.info.title')}</span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onTogglePin}
+              className="size-7"
+              title={pinned ? t('asset.info.unpin') : t('asset.info.pin')}
+            >
+              <Pin className={cn("size-4", pinned && "fill-current text-primary")} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="size-7"
+            >
+              <XCircle className="size-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="mb-4 aspect-video overflow-hidden rounded-lg bg-surface-active">
-          <img
-            src={asset.thumbnail}
-            alt={asset.filename}
-            className="h-full w-full object-contain"
-          />
-        </div>
+      <div className={embedded ? "p-4" : "flex-1 overflow-y-auto p-4"}>
+        {!embedded && (
+          <div className="mb-4 aspect-video overflow-hidden rounded-lg bg-surface-active">
+            <img
+              src={asset.thumbnail}
+              alt={asset.filename}
+              className="size-full object-contain"
+            />
+          </div>
+        )}
 
         {!isEditMode ? (
           <>
@@ -192,7 +202,7 @@ export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, 
                   onClick={handleEnterEditMode}
                   className="h-6 gap-1 border border-border-subtle bg-surface-hover px-2 text-[11px] text-foreground hover:bg-surface-active"
                 >
-                  <Pencil className="h-3 w-3" />
+                  <Pencil className="size-3" />
                   {t('common.edit')}
                 </Button>
               </div>
@@ -256,7 +266,7 @@ export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, 
                     onClick={handleCancelEdit}
                     className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="size-3" />
                     {t('common.cancel')}
                   </Button>
                   <Button
@@ -266,7 +276,7 @@ export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, 
                     disabled={isSaving}
                     className="h-6 gap-1 border border-success/30 bg-success/10 px-2 text-[11px] text-success hover:bg-success/20"
                   >
-                    <Check className="h-3 w-3" />
+                    <Check className="size-3" />
                     {t('common.save')}
                   </Button>
                 </div>
@@ -292,7 +302,7 @@ export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, 
                     onClick={() => handleRemoveTag(tag)}
                   >
                     {tag}
-                    <X className="h-2.5 w-2.5 opacity-60 transition-opacity hover:opacity-100" />
+                    <X className="size-2.5 opacity-60 transition-opacity hover:opacity-100" />
                   </span>
                 ))}
                 <Input
@@ -300,7 +310,7 @@ export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, 
                   onChange={(e) => setNewTagInput(e.target.value)}
                   onKeyDown={handleAddTag}
                   placeholder={t('asset.info.tagPlaceholder')}
-                  className="min-w-[100px] flex-1 border-0 bg-transparent px-1 py-0.5 text-[11px] placeholder-muted-foreground focus:ring-0"
+                  className="min-w-[100px] flex-1 border-0 bg-transparent px-1 py-0.5 text-[11px] placeholder:text-muted-foreground focus:ring-0"
                 />
               </div>
             </div>
@@ -310,7 +320,7 @@ export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, 
               <Textarea
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
-                className="h-[60px] resize-none bg-background text-sm placeholder-muted-foreground"
+                className="h-[60px] resize-none bg-background text-sm placeholder:text-muted-foreground"
                 placeholder={t('asset.info.descriptionPlaceholder')}
               />
             </div>
@@ -348,7 +358,33 @@ export function AssetInfoPanel({ asset, onClose, onUpdate, pinned, onTogglePin, 
               <span className="text-muted-foreground">{t('asset.info.createdAt')}:</span>
               <span className="text-foreground">{formatDate(asset.createdAt)}</span>
             </div>
+
+            <div className="flex items-center gap-2 text-xs">
+              <FolderTree className="size-4 shrink-0 text-muted-foreground" />
+              <span className="shrink-0 text-muted-foreground">{t('asset.info.category')}:</span>
+              <span className="min-w-0 truncate text-foreground">
+                {categoryPath || t('asset.category.uncategorized')}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs">
+              <FileText className="size-4 shrink-0 text-muted-foreground" />
+              <span className="shrink-0 text-muted-foreground">{t('asset.info.path')}:</span>
+              <span className="min-w-0 truncate text-foreground" title={asset.filePath}>{asset.filePath}</span>
+            </div>
           </div>
+
+          {onOpenLocation && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 w-full gap-2"
+              onClick={() => void onOpenLocation(asset.id)}
+            >
+              <FolderOpen className="size-4" />
+              {t('asset.info.openLocation')}
+            </Button>
+          )}
         </div>
 
         {onDelete && (

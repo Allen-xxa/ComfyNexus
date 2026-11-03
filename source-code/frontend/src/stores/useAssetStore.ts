@@ -26,7 +26,9 @@ const extractFilterTags = (assets: Asset[]): AssetFilterTag[] => {
   ]
 }
 
-type SortBy = 'name' | 'createdAt' | 'size'
+export type SortBy = 'name' | 'createdAt' | 'size'
+
+export type AssetViewMode = 'masonry' | 'grid'
 
 export type AssetGalleryItem =
   | { kind: 'folder'; category: AssetCategory; assetCount: number }
@@ -78,6 +80,7 @@ interface AssetStore {
   _pollingInterval: ReturnType<typeof setInterval> | null
   thumbnailSize: number
   showFoldersInList: boolean
+  viewMode: AssetViewMode
 
   loadData: () => Promise<void>
   refreshData: () => Promise<void>
@@ -113,6 +116,7 @@ interface AssetStore {
   exportToPromptLibrary: (id: string, force?: boolean) => Promise<{ success: boolean; error_message?: string; prompt?: unknown }>
   setSortBy: (sortBy: SortBy) => void
   setShowFoldersInList: (show: boolean) => void
+  setViewMode: (mode: AssetViewMode) => void
   getFilteredAssets: () => Asset[]
   getGalleryItems: () => AssetGalleryItem[]
   getAssetCount: () => number
@@ -219,6 +223,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   _pollingInterval: null as NodeJS.Timeout | null,
   thumbnailSize: Number(localStorage.getItem('thumbnailSize')) || 250,
   showFoldersInList: localStorage.getItem('asset-show-folders-in-list') === 'true',
+  viewMode: localStorage.getItem('asset-view-mode') === 'grid' ? 'grid' : 'masonry',
 
   loadData: async () => {
     console.log('[useAssetStore] 加载数据开始')
@@ -629,20 +634,17 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     console.log('[useAssetStore] 删除资产:', ids.length, '个')
 
     try {
-      set({ isLoading: true })
-
+      // 不切换 isLoading：列表已是就地移除，切骨架屏会让瀑布流整体卸载、滚动位置丢失。
       if (isDevelopment()) {
         await new Promise((resolve) => setTimeout(resolve, 300))
         set((state) => ({
           assets: state.assets.filter((a) => !ids.includes(a.id)),
-          selectedAssetIds: state.selectedAssetIds.filter((id) => !ids.includes(id)),
-          isLoading: false
+          selectedAssetIds: state.selectedAssetIds.filter((id) => !ids.includes(id))
         }))
         return true
       }
 
       const result = await window.pywebview.api.gallery_batch_delete(ids)
-      set({ isLoading: false })
 
       if (result.success) {
         set((state) => ({
@@ -656,7 +658,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       return false
     } catch (error) {
       console.error('[useAssetStore] 删除资产异常:', error)
-      set({ isLoading: false, error: i18n.t('asset.error.deleteException', { error: String(error) }) })
+      set({ error: i18n.t('asset.error.deleteException', { error: String(error) }) })
       return false
     }
   },
@@ -1056,6 +1058,11 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       selectedAssetIds: [],
       isBatchMode: false
     })
+  },
+
+  setViewMode: (mode) => {
+    localStorage.setItem('asset-view-mode', mode)
+    set({ viewMode: mode })
   },
 
   getFilteredAssets: () => {

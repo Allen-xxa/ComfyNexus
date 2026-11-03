@@ -14,7 +14,9 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { ResizableSidebar } from '@/components/common/ResizableSidebar'
 import { useAssetStore } from '@/stores/useAssetStore'
+import { useAssetDragContext } from './AssetDragContext'
 import type { AssetCategory } from '@/mocks/asset'
 
 interface AssetCategoryTreeProps {
@@ -120,14 +122,7 @@ export function AssetCategoryTree({ className, onOpenCategoryManage }: AssetCate
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
 
-  let dropTargetId: string | null = null
-  try {
-    const { useAssetDragContext } = require('./AssetDragContext')
-    const dragContext = useAssetDragContext()
-    dropTargetId = dragContext.dropTargetId
-  } catch {
-    // 不在 DragProvider 内部时忽略
-  }
+  const dropTargetId = useAssetDragContext()?.dropTargetId ?? null
 
   const totalAssets = assets.length
   const favoriteCount = assets.filter((a) => a.isFavorite).length
@@ -167,8 +162,8 @@ export function AssetCategoryTree({ className, onOpenCategoryManage }: AssetCate
   }, [assets])
 
   return (
-    <aside className={cn('flex w-56 flex-col shrink-0 border-r border-border-subtle bg-surface', className)}>
-      <ScrollArea className="flex-1 p-3">
+    <ResizableSidebar storageKey="asset-category-tree" className={className}>
+      <ScrollArea className="min-h-0 flex-1 p-3">
         <div className="flex flex-col gap-0.5">
           <div
             data-category-id="all"
@@ -252,6 +247,6 @@ export function AssetCategoryTree({ className, onOpenCategoryManage }: AssetCate
           {t('asset.manageCategory')}
         </Button>
       </div>
-    </aside>
+    </ResizableSidebar>
   )
 }

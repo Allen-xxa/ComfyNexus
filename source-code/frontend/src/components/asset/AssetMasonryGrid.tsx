@@ -16,6 +16,8 @@ export interface AssetMasonryGridRef {
 interface AssetMasonryGridProps {
   onImageClick?: (asset: Asset) => void
   onImageDoubleClick?: (asset: Asset) => void
+  /** 卡片上的「查看」入口，进入影院模式 */
+  onView?: (asset: Asset) => void
   onImageContextMenu?: (e: React.MouseEvent, asset: Asset) => void
 }
 
@@ -23,7 +25,7 @@ const SKELETON_HEIGHTS = [320, 280, 400, 350, 260, 380, 300, 420, 340, 290, 360,
 const GAP = 20
 
 export const AssetMasonryGrid = forwardRef<AssetMasonryGridRef, AssetMasonryGridProps>(
-  function AssetMasonryGrid({ onImageClick, onImageDoubleClick, onImageContextMenu }, ref) {
+  function AssetMasonryGrid({ onImageClick, onImageDoubleClick, onView, onImageContextMenu }, ref) {
     const { t } = useTranslation()
     const { 
       isLoading, 
@@ -174,6 +176,7 @@ export const AssetMasonryGrid = forwardRef<AssetMasonryGridRef, AssetMasonryGrid
                     ref={(el) => registerCardRef(asset.id, el)}
                     onClick={() => onImageClick?.(asset)}
                     onDoubleClick={() => onImageDoubleClick?.(asset)}
+                    onView={() => onView?.(asset)}
                     onContextMenu={(e) => onImageContextMenu?.(e, asset)}
                     isBatchMode={isBatchMode}
                   />

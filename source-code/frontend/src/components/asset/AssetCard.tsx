@@ -4,7 +4,7 @@
 
 import { forwardRef, useState, useCallback, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Copy, Check, Eye, EyeOff, Send } from 'lucide-react'
+import { Copy, Check, Eye, EyeOff, Maximize2, Send } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAssetStore } from '@/stores/useAssetStore'
 import { useAssetDragContext } from './AssetDragContext'
@@ -17,12 +17,16 @@ interface AssetCardProps {
   asset: Asset
   onClick?: () => void
   onDoubleClick?: () => void
+  /** 显式进入影院模式；不传时仅能用双击触发 */
+  onView?: () => void
   onContextMenu?: (e: React.MouseEvent) => void
   isBatchMode?: boolean
+  /** masonry：瀑布流，按原图比例撑高；grid：网格，固定方形缩略图 */
+  variant?: 'masonry' | 'grid'
 }
 
 export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
-  function AssetCard({ asset, onClick, onDoubleClick, onContextMenu, isBatchMode }, ref) {
+  function AssetCard({ asset, onClick, onDoubleClick, onView, onContextMenu, isBatchMode, variant = 'masonry' }, ref) {
     const { t } = useTranslation()
     const { selectedAssetIds, toggleAssetSelection, updatePreviewBlurred, pushImageToComfyUI } = useAssetStore()
     const { comfyUIStatus, showWorkspaceIframe } = useProcessStore()
@@ -31,20 +35,8 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
     const [isLocalDragging, setIsLocalDragging] = useState(false)
     const [isPushing, setIsPushing] = useState(false)
     
-    let dragContext: ReturnType<typeof useAssetDragContext> | null = null
-    try {
-      dragContext = useAssetDragContext()
-    } catch {
-      // 不在 DragProvider 内部时忽略
-    }
-    
-    const { 
-      isDragging: isGlobalDragging, 
-      startDrag, 
-      updatePosition, 
-      endDrag, 
-      setDropTargetId 
-    } = dragContext || {}
+    const dragContext = useAssetDragContext()
+    const isGlobalDragging = dragContext?.isDragging ?? false
 
     const mouseDownPosRef = useRef({ x: 0, y: 0 })
     const isDragTriggeredRef = useRef(false)
@@ -112,7 +104,7 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
         } else {
           error(result.error_message || t('asset.push.failed'))
         }
-      } catch (err) {
+      } catch {
         error(t('asset.push.failed'))
       } finally {
         setIsPushing(false)
@@ -129,6 +121,11 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
       } catch {
         error(t('asset.toast.copyFailed'))
       }
+    }
+
+    const handleView = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      onView?.()
     }
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -153,50 +150,51 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
         if (distance > 5 && !isDragTriggeredRef.current) {
           isDragTriggeredRef.current = true
           setIsLocalDragging(true)
-          startDrag!(asset.id, selectedAssetIds, moveEvent.clientX, moveEvent.clientY)
+          dragContext.startDrag(asset.id, selectedAssetIds, moveEvent.clientX, moveEvent.clientY)
         }
-        
+
         if (isDragTriggeredRef.current) {
-          updatePosition!(moveEvent.clientX, moveEvent.clientY)
-          
+          dragContext.updatePosition(moveEvent.clientX, moveEvent.clientY)
+
           const target = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)
           const categoryItem = target?.closest('[data-category-id]')
           if (categoryItem) {
             const categoryId = categoryItem.getAttribute('data-category-id')
             const isVirtual = categoryItem.getAttribute('data-is-virtual') === 'true'
             const isFavorites = categoryId === 'favorites'
-            
+
             if (categoryId && (!isVirtual || isFavorites)) {
-              setDropTargetId!(categoryId)
+              dragContext.setDropTargetId(categoryId)
             } else {
-              setDropTargetId!(null)
+              dragContext.setDropTargetId(null)
             }
           } else {
-            setDropTargetId!(null)
+            dragContext.setDropTargetId(null)
           }
         }
       }
-      
+
       const handleMouseUp = () => {
         isMouseDownRef.current = false
         document.removeEventListener('mousemove', handleMouseMove)
         document.removeEventListener('mouseup', handleMouseUp)
-        
+
         if (isDragTriggeredRef.current) {
           setIsLocalDragging(false)
-          endDrag!()
+          dragContext.endDrag()
         }
-        
+
         setTimeout(() => {
           isDragTriggeredRef.current = false
         }, 0)
       }
-      
+
       document.addEventListener('mousemove', handleMouseMove)
       document.addEventListener('mouseup', handleMouseUp)
-    }, [asset.id, selectedAssetIds, dragContext, startDrag, updatePosition, endDrag, setDropTargetId, isBatchMode, isSelected])
+    }, [asset.id, selectedAssetIds, dragContext, isBatchMode, isSelected])
 
     const isVisualDragging = isLocalDragging && isGlobalDragging
+    const isGrid = variant === 'grid'
 
     return (
       <div
@@ -204,9 +202,12 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
         data-asset-card
         data-asset-id={asset.id}
         className={cn(
-          'group relative mb-5 break-inside-avoid overflow-hidden rounded-lg border border-border-subtle bg-surface transition-all cursor-grab',
+          'group relative overflow-hidden rounded-lg border border-border-subtle bg-surface transition-all cursor-grab',
           'hover:-translate-y-1 hover:shadow-soft-lg hover:border-border-strong',
           'active:cursor-grabbing',
+          isGrid
+            ? 'flex h-full w-full flex-col hover:translate-y-0'
+            : 'mb-5 break-inside-avoid',
           isSelected && 'ring-2 ring-success ring-offset-2 ring-offset-background',
           isVisualDragging && 'opacity-50 scale-[0.98] border-primary ring-2 ring-primary/30'
         )}
@@ -215,9 +216,9 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
         onClick={handleClick}
         onMouseDown={handleMouseDown}
       >
-        <div 
-          className="relative w-full"
-          style={{ paddingBottom: `${(asset.height / asset.width) * 100}%` }}
+        <div
+          className={cn('relative w-full', isGrid && 'min-h-0 flex-1')}
+          style={isGrid ? undefined : { paddingBottom: `${(asset.height / asset.width) * 100}%` }}
         >
           {!isLoaded && (
             <div className="absolute inset-0 animate-pulse bg-surface-active" />
@@ -228,9 +229,9 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
             loading="lazy"
             onLoad={() => setIsLoaded(true)}
             className={cn(
-              'absolute inset-0 w-full h-full object-cover transition-opacity duration-300',
+              'absolute inset-0 size-full object-cover transition-opacity duration-300',
               isLoaded ? 'opacity-100' : 'opacity-0',
-              isBlurred && 'blur-lg scale-[1.15]'
+              isBlurred && 'scale-[1.15] blur-lg'
             )}
           />
 
@@ -252,6 +253,23 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
               ) : (
                 <Eye className="size-4 text-muted-foreground" />
               )}
+            </Button>
+          )}
+
+          {onView && !isBatchMode && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleView}
+              className={cn(
+                'absolute left-2 top-2 size-7',
+                'bg-background/80 backdrop-blur-sm',
+                'opacity-0 group-hover:opacity-100 transition-opacity duration-200',
+                'hover:bg-background/90'
+              )}
+              title={t('asset.theater.enter')}
+            >
+              <Maximize2 className="size-4 text-muted-foreground" />
             </Button>
           )}
 
@@ -308,7 +326,7 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
             </div>
           )}
         </div>
-        <div className="px-1 py-1.5">
+        <div className={cn('px-1 py-1.5', isGrid && 'shrink-0 border-t border-border-subtle')}>
           <p className="truncate text-[10px] text-muted-foreground">{asset.filename}</p>
           <p className="text-[10px] text-muted-foreground/70">{asset.width}×{asset.height}</p>
         </div>

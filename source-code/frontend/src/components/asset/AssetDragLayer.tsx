@@ -10,8 +10,14 @@ interface AssetDragLayerProps {
   getCardRefs: () => Map<string, HTMLDivElement>
 }
 
+const EMPTY_IDS: string[] = []
+const ORIGIN = { x: 0, y: 0 }
+
 export function AssetDragLayer({ getCardRefs }: AssetDragLayerProps) {
-  const { isDragging, draggingAssetIds, dragPosition } = useAssetDragContext()
+  const dragContext = useAssetDragContext()
+  const isDragging = dragContext?.isDragging ?? false
+  const draggingAssetIds = dragContext?.draggingAssetIds ?? EMPTY_IDS
+  const dragPosition = dragContext?.dragPosition ?? ORIGIN
   const layerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
