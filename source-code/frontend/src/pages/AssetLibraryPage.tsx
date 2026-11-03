@@ -373,14 +373,16 @@ export default function AssetLibraryPage() {
           hideLayoutControls={!!theaterAsset}
         />
 
-        <main className="relative flex flex-1 overflow-hidden">
+        {/* 横向用 clip、纵向用 hidden：clip 不产生滚动容器，轨道列表定位时的滚动才不会顺带把
+            整行（含分类树）推出可视区；纵向仍需 hidden 保证这一层按可用高度收缩，不被内容撑高 */}
+        <main className="relative flex flex-1 overflow-y-hidden overflow-x-clip">
           <AssetCategoryTree onOpenCategoryManage={() => setShowCategoryManage(true)} />
 
-          <div className="relative flex min-h-0 flex-1">
+          <div className="relative flex min-h-0 min-w-0 flex-1">
             <div
               ref={scrollContainerRef}
               className={cn(
-                'flex-1 bg-background',
+                'min-w-0 flex-1 bg-background',
                 viewMode === 'grid' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'
               )}
               onMouseDown={handleSelectionMouseDown}
