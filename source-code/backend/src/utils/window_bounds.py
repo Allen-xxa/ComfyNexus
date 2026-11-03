@@ -7,6 +7,7 @@
 
 import ctypes
 import ctypes.wintypes as wintypes
+import os
 from typing import Tuple, Optional
 from backend.src.utils.logger import app_logger as logger
 
@@ -87,6 +88,17 @@ _user32.SetWindowPos.restype = wintypes.BOOL
 # FindWindowW
 _user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
 _user32.FindWindowW.restype = wintypes.HWND
+
+# EnumWindows / 窗口归属查询（按进程筛选窗口）
+_enum_windows_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+_user32.EnumWindows.argtypes = [_enum_windows_proc, wintypes.LPARAM]
+_user32.EnumWindows.restype = wintypes.BOOL
+_user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+_user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+_user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+_user32.GetWindowTextLengthW.restype = ctypes.c_int
+_user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+_user32.GetWindowTextW.restype = ctypes.c_int
 
 # ShowWindow
 _user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
@@ -332,33 +344,77 @@ def reset_window_to_center(hwnd: int, default_width: int = 1680, default_height:
         return False
 
 
-def find_window_by_title(title: str, max_retries: int = 10, retry_interval: float = 0.2) -> Optional[int]:
+def _find_own_window_by_title(title: str, exclude: Tuple[str, ...]) -> Optional[int]:
+    """在本进程创建的顶层窗口里按标题查找句柄，找不到返回 None。
+
+    不能直接用 FindWindowW：任务栏会为应用另建一个
+    Windows.Internal.Shell.TabProxyWindow，它同样携带窗口标题且 Z 序更靠前，
+    拿它当主窗口会让后续的样式/位置/消息调用全部静默打在别人的窗口上。
     """
-    通过窗口标题查找窗口句柄（带重试机制）
-    
+    own_pid = os.getpid()
+    matches = []
+
+    @_enum_windows_proc
+    def callback(hwnd, _lparam):
+        pid = wintypes.DWORD()
+        _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value != own_pid:
+            return True
+
+        length = _user32.GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return True
+
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        _user32.GetWindowTextW(hwnd, buffer, length + 1)
+        window_title = buffer.value
+        if window_title.startswith(title) and not any(x in window_title for x in exclude):
+            matches.append((int(hwnd or 0), window_title))
+        return True
+
+    _user32.EnumWindows(callback, 0)
+
+    for hwnd, window_title in matches:
+        if hwnd and window_title == title:
+            return hwnd
+    return matches[0][0] if matches and matches[0][0] else None
+
+
+def find_window_by_title(
+    title: str,
+    max_retries: int = 10,
+    retry_interval: float = 0.2,
+    exclude: Tuple[str, ...] = ("Floating",),
+) -> Optional[int]:
+    """
+    通过窗口标题查找本进程的窗口句柄（带重试机制）
+
+    只做 Win32 只读查询，不触碰 WinForms 对象，因此可以在后台线程中调用。
+
     Args:
         title: 窗口标题
         max_retries: 最大重试次数
         retry_interval: 重试间隔（秒）
-        
+        exclude: 标题需排除的子串，默认排除悬浮窗
+
     Returns:
         Optional[int]: 窗口句柄，如果未找到返回 None
     """
     try:
         import time
-        
+
         for attempt in range(max_retries):
-            hwnd = _user32.FindWindowW(None, title)
-            
-            if hwnd and hwnd != 0:
+            hwnd = _find_own_window_by_title(title, exclude)
+
+            if hwnd:
                 logger.debug(f"[WindowBounds] 找到窗口 '{title}': {hwnd} (尝试 {attempt + 1}/{max_retries})")
                 return hwnd
-            
+
             time.sleep(retry_interval)
-        
+
         logger.warning(f"[WindowBounds] 未找到窗口 '{title}' (尝试 {max_retries} 次)")
         return None
-        
+
     except Exception as e:
         logger.error(f"[WindowBounds] 查找窗口失败: {e}")
         return None

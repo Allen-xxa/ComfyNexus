@@ -990,21 +990,25 @@ def main():
         try:
             import ctypes
             import time
-            
+
+            from backend.src.utils.window_bounds import find_window_by_title
+
             user32 = ctypes.windll.user32
-            
+
             # 重试机制：最多尝试 10 次，每次间隔 0.2 秒
             max_retries = 10
             retry_interval = 0.2
             hwnd = 0
-            
+
             for attempt in range(max_retries):
                 time.sleep(retry_interval)
-                hwnd = user32.FindWindowW(None, "ComfyNexus")
-                if hwnd and hwnd != 0:
+                # 只认本进程自己的窗口：FindWindowW 会先命中任务栏为应用创建的
+                # TabProxyWindow（explorer 进程），样式与位置就会静默打在它身上。
+                hwnd = find_window_by_title("ComfyNexus", max_retries=1, retry_interval=0) or 0
+                if hwnd:
                     break
-            
-            if hwnd and hwnd != 0:
+
+            if hwnd:
                 GWL_STYLE = -16
                 WS_POPUP = 0x80000000
                 WS_CAPTION = 0x00C00000
@@ -1118,18 +1122,12 @@ def main():
                 logger.warning(f"[on_webview_ready] 应用窗口图标失败: {e}")
 
         if floating_window_needs_show:
-            import ctypes
-            user32 = ctypes.windll.user32
-            
+            from backend.src.utils.window_bounds import find_window_by_title
+
             max_retries = 5
-            main_hwnd = 0
-            for attempt in range(max_retries):
-                main_hwnd = user32.FindWindowW(None, "ComfyNexus")
-                if main_hwnd and main_hwnd != 0:
-                    break
-                time.sleep(0.1)
-            
-            if main_hwnd and main_hwnd != 0:
+            main_hwnd = find_window_by_title("ComfyNexus", max_retries=max_retries, retry_interval=0.1) or 0
+
+            if main_hwnd:
                 floating_window_manager.set_main_hwnd(main_hwnd)
                 logger.debug(f"[on_webview_ready] 主窗口句柄: {main_hwnd}")
             else:

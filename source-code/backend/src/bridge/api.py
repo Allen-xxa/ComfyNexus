@@ -151,6 +151,29 @@ class Api:
         # 启动窗口移动监听器（用于拖动还原）
         self._start_window_move_listener()
     
+    def _get_window_hwnd(self) -> int:
+        """取主窗口真实的 Win32 句柄，失败返回 0。
+
+        window.gui 是 pywebview 的 winforms 模块对象，没有 hwnd 属性；而按标题
+        FindWindowW 会命中任务栏为应用创建的 Windows.Internal.Shell.TabProxyWindow
+        （属于 explorer 进程），消息发过去静默无效。所以只认 native Form 的句柄，
+        兜底也必须枚举本进程自己的顶层窗口，不能只按标题取第一个匹配。
+        """
+        if self._window is None:
+            return 0
+
+        try:
+            return int(self._window.native.Handle.ToInt32())
+        except Exception:
+            pass
+
+        try:
+            from backend.src.utils.window_bounds import find_window_by_title
+            return find_window_by_title("ComfyNexus", max_retries=1, retry_interval=0) or 0
+        except Exception as e:
+            logger.debug(f"[_get_window_hwnd] 兜底查找句柄失败: {e}")
+            return 0
+    
     def start_async_dependencies_update(self):
         """
         启动异步依赖信息更新
@@ -417,13 +440,13 @@ class Api:
         if self._window:
             try:
                 import ctypes
-                hwnd = ctypes.windll.user32.FindWindowW(None, "ComfyNexus")
+                hwnd = self._get_window_hwnd()
                 if hwnd:
                     ctypes.windll.user32.PostMessageW(hwnd, 0x0010, 0, 0)
                 else:
                     self._window.destroy()
-            except Exception:
-                self._window.destroy()
+            except Exception as e:
+                logger.warning(f"[closeApp] PostMessage 关闭失败，回退 destroy: {e}")
                 self._window.destroy()
         logger.info("[closeApp] 执行完毕")
     
@@ -438,15 +461,9 @@ class Api:
                     import ctypes
                     user32 = ctypes.windll.user32
                     
-                    # 获取窗口句柄
-                    hwnd = None
-                    if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                        hwnd = self._window.gui.hwnd
-                    
-                    if not hwnd or hwnd == 0:
-                        hwnd = user32.FindWindowW(None, "ComfyNexus")
-                    
-                    if hwnd and hwnd != 0:
+                    hwnd = self._get_window_hwnd()
+
+                    if hwnd:
                         # 先还原窗口
                         if self._window_state:
                             x = self._window_state['x']
@@ -505,19 +522,9 @@ class Api:
             try:
                 import ctypes
 
-                # 优先尝试从 pywebview 获取窗口句柄
-                hwnd = None
-                if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                    hwnd = self._window.gui.hwnd
-                    logger.debug(f"[最大化] 从 pywebview.gui.hwnd 获取窗口句柄: {hwnd}")
+                hwnd = self._get_window_hwnd()
 
-                # 如果失败，尝试通过窗口标题查找
-                if not hwnd or hwnd == 0:
-                    user32 = ctypes.windll.user32
-                    hwnd = user32.FindWindowW(None, "ComfyNexus")
-                    logger.debug(f"[最大化] 通过 FindWindowW 查找窗口句柄: {hwnd}")
-
-                if hwnd and hwnd != 0:
+                if hwnd:
                     user32 = ctypes.windll.user32
 
                     if self._is_maximized:
@@ -608,17 +615,11 @@ class Api:
             dict: {"success": bool, "message": str}
         """
         try:
-            from backend.src.utils.window_bounds import reset_window_to_center, find_window_by_title
-            
-            # 获取窗口句柄
-            hwnd = None
-            if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                hwnd = self._window.gui.hwnd
-            
-            if not hwnd or hwnd == 0:
-                hwnd = find_window_by_title("ComfyNexus", max_retries=3, retry_interval=0.2)
-            
-            if hwnd and hwnd != 0:
+            from backend.src.utils.window_bounds import reset_window_to_center
+
+            hwnd = self._get_window_hwnd()
+
+            if hwnd:
                 # 从配置获取默认窗口尺寸
                 default_width, default_height = self._get_settings_window_size()
                 
@@ -649,17 +650,11 @@ class Api:
             dict: {"success": bool, "adjusted": bool, "message": str}
         """
         try:
-            from backend.src.utils.window_bounds import check_and_fix_window_bounds, find_window_by_title
-            
-            # 获取窗口句柄
-            hwnd = None
-            if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                hwnd = self._window.gui.hwnd
-            
-            if not hwnd or hwnd == 0:
-                hwnd = find_window_by_title("ComfyNexus", max_retries=1, retry_interval=0)
-            
-            if hwnd and hwnd != 0:
+            from backend.src.utils.window_bounds import check_and_fix_window_bounds
+
+            hwnd = self._get_window_hwnd()
+
+            if hwnd:
                 adjusted = check_and_fix_window_bounds(hwnd)
                 
                 if adjusted:
@@ -776,22 +771,12 @@ class Api:
                 # 等待窗口创建完成（最多等待 5 秒）
                 hwnd = None
                 for attempt in range(50):  # 50 次 * 0.1 秒 = 5 秒
-                    # 优先尝试从 pywebview 获取
-                    if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                        hwnd = self._window.gui.hwnd
-                        if hwnd and hwnd != 0:
-                            logger.debug(f"[窗口监听] 从 pywebview.gui.hwnd 获取窗口句柄: {hwnd}")
-                            break
-                    
-                    # 尝试通过窗口标题查找
-                    hwnd = user32.FindWindowW(None, "ComfyNexus")
-                    if hwnd and hwnd != 0:
-                        logger.debug(f"[窗口监听] 通过 FindWindowW 获取窗口句柄: {hwnd} (尝试 {attempt + 1}/50)")
+                    hwnd = self._get_window_hwnd()
+                    if hwnd:
                         break
-                    
                     time.sleep(0.1)
-                
-                if not hwnd or hwnd == 0:
+
+                if not hwnd:
                     logger.warning("[窗口监听] 无法获取窗口句柄，监听器退出")
                     return
                 
@@ -1024,14 +1009,9 @@ class Api:
             user32 = ctypes.windll.user32
             
             # 获取窗口句柄
-            hwnd = None
-            if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                hwnd = self._window.gui.hwnd
+            hwnd = self._get_window_hwnd()
             
-            if not hwnd or hwnd == 0:
-                hwnd = user32.FindWindowW(None, "ComfyNexus")
-            
-            if hwnd and hwnd != 0:
+            if hwnd:
                 # 释放鼠标捕获
                 user32.ReleaseCapture()
                 
@@ -1086,14 +1066,9 @@ class Api:
             
             user32 = ctypes.windll.user32
             
-            hwnd = None
-            if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                hwnd = self._window.gui.hwnd
+            hwnd = self._get_window_hwnd()
             
-            if not hwnd or hwnd == 0:
-                hwnd = user32.FindWindowW(None, "ComfyNexus")
-            
-            if not hwnd or hwnd == 0:
+            if not hwnd:
                 logger.error("[拖动还原] 无法获取窗口句柄")
                 return {"success": False, "message": "无法获取窗口句柄"}
             
@@ -1179,16 +1154,9 @@ class Api:
             import ctypes
             user32 = ctypes.windll.user32
             
-            hwnd = None
-            if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                hwnd = self._window.gui.hwnd
-                logger.debug(f"[全屏转最大化] 获取窗口句柄: {hwnd}")
+            hwnd = self._get_window_hwnd()
             
-            if not hwnd or hwnd == 0:
-                hwnd = user32.FindWindowW(None, "ComfyNexus")
-                logger.debug(f"[全屏转最大化] 通过 FindWindowW 查找窗口句柄: {hwnd}")
-            
-            if hwnd and hwnd != 0:
+            if hwnd:
                 self._save_window_rect(hwnd)
                 
                 from backend.src.utils.window_bounds import MONITORINFO
@@ -1238,14 +1206,9 @@ class Api:
             import ctypes
             user32 = ctypes.windll.user32
             
-            hwnd = None
-            if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                hwnd = self._window.gui.hwnd
-            
-            if not hwnd or hwnd == 0:
-                hwnd = user32.FindWindowW(None, "ComfyNexus")
-            
-            if hwnd and hwnd != 0:
+            hwnd = self._get_window_hwnd()
+
+            if hwnd:
                 from backend.src.utils.window_bounds import RECT
                 
                 rect = RECT()
@@ -1275,14 +1238,9 @@ class Api:
             import ctypes
             user32 = ctypes.windll.user32
             
-            hwnd = None
-            if hasattr(self._window, 'gui') and hasattr(self._window.gui, 'hwnd'):
-                hwnd = self._window.gui.hwnd
+            hwnd = self._get_window_hwnd()
             
-            if not hwnd or hwnd == 0:
-                hwnd = user32.FindWindowW(None, "ComfyNexus")
-            
-            if hwnd and hwnd != 0:
+            if hwnd:
                 user32.SetWindowPos(hwnd, None, physical_x, physical_y, 0, 0, 0x0001 | 0x0004)
         except Exception:
             self._window.move(x, y)
@@ -7031,6 +6989,23 @@ class Api:
         """
         return self._prompt_library_controller.category_update(category_id, name, icon, sort_order)
     
+    def category_move(self, category_id: str, parent_id: str = None, index: int = 0):
+        """
+        移动分类（换父级和/或排序）
+        
+        Args:
+            category_id: 分类ID
+            parent_id: 目标父分类ID，None 表示顶级
+            index: 在目标同级列表中的插入位置
+            
+        Returns:
+            dict: {
+                "success": bool,
+                "error_message": str (可选)
+            }
+        """
+        return self._prompt_library_controller.category_move(category_id, parent_id, index)
+    
     def category_delete(self, category_id: str):
         """
         删除分类
@@ -7259,18 +7234,19 @@ class Api:
             logger.error(f"更新文件夹失败：{e}")
             return {"success": False, "error": str(e)}
     
-    def delete_workflow_folder(self, folder_id: str) -> dict:
+    def delete_workflow_folder(self, folder_id: str, move_contents_to_root: bool = False) -> dict:
         """
         删除文件夹
         
         Args:
             folder_id: 文件夹 ID
+            move_contents_to_root: 为 True 时先把文件夹内的工作流移动到根目录再删除
             
         Returns:
             dict: {"success": bool, "error": str}
         """
         try:
-            result = self._workflow_controller.delete_folder(folder_id)
+            result = self._workflow_controller.delete_folder(folder_id, move_contents_to_root)
             if result.get("success"):
                 return {"success": True}
             return {"success": False, "error": result.get("error", "删除失败")}
