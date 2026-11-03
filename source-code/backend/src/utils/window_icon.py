@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import ctypes
 import logging
-import time
 from ctypes import wintypes
 from pathlib import Path
 
@@ -58,9 +57,6 @@ if hasattr(ctypes, "WinDLL"):
 
     _shell32.SetCurrentProcessExplicitAppUserModelID.argtypes = [wintypes.LPCWSTR]
     _shell32.SetCurrentProcessExplicitAppUserModelID.restype = ctypes.c_long
-
-    _user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
-    _user32.FindWindowW.restype = wintypes.HWND
 
     _user32.LoadImageW.argtypes = [
         wintypes.HINSTANCE,
@@ -182,15 +178,13 @@ def apply_icon_to_window_by_title(
     if _user32 is None:
         return False
 
-    hwnd = 0
-    for _ in range(max(1, retries)):
-        hwnd = int(_user32.FindWindowW(None, title) or 0)
-        if hwnd:
-            break
-        time.sleep(interval)
+    # 走 window_bounds 的本进程枚举：FindWindowW 会先命中 explorer 为任务栏建的
+    # TabProxyWindow，图标就写到别人的窗口上，本窗口依旧显示 python.exe 图标。
+    from backend.src.utils.window_bounds import find_window_by_title
 
+    hwnd = find_window_by_title(title, max_retries=max(1, retries), retry_interval=interval)
     if not hwnd:
-        logger.warning(f"[窗口图标] 未找到标题为 {title!r} 的窗口")
+        logger.warning(f"[窗口图标] 未找到本进程标题为 {title!r} 的窗口")
         return False
 
     return apply_window_icon(hwnd, ico_path)
