@@ -51,6 +51,7 @@ export default {
           hover: 'hsl(var(--bg-surface-hover))',
           active: 'hsl(var(--bg-surface-active))',
         },
+        theater: 'hsl(var(--theater-backdrop))',
         content: {
           primary: 'hsl(var(--text-primary))',
           secondary: 'hsl(var(--text-secondary))',

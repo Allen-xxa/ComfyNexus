@@ -4512,7 +4512,14 @@
       "exitHint": "按 Esc 返回列表",
       "noPrompt": "未解析到提示词",
       "filmstrip": "筛选结果",
-      "position": "{current} / {total}"
+      "position": "{current} / {total}",
+      "chrome": {
+        "nav": "左侧菜单",
+        "filter": "筛选区",
+        "detail": "详情栏",
+        "show": "显示",
+        "hide": "隐藏"
+      }
     },
     "showFoldersHint": "开启：子目录以文件夹卡片呈现，需点击进入，列表只显示当前目录直属的资产。关闭：平铺展示所选目录及其所有子目录的全部资产。",
     "folder": {

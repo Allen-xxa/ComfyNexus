@@ -3917,7 +3917,14 @@
       "exitHint": "Press Esc to return to the list",
       "noPrompt": "No prompt detected",
       "filmstrip": "Filtered results",
-      "position": "{current} / {total}"
+      "position": "{current} / {total}",
+      "chrome": {
+        "nav": "left menu",
+        "filter": "filter bar",
+        "detail": "details panel",
+        "show": "Show",
+        "hide": "Hide"
+      }
     },
     "showFoldersHint": "On: sub-folders appear as folder cards you click to enter, and the list shows only the assets directly in the current folder. Off: flatten and show every asset in the selected folder and all of its sub-folders.",
     "folder": {

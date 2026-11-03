@@ -24,6 +24,8 @@ import {
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Button } from '@/components/ui/Button'
 import { useAssetStore } from '@/stores/useAssetStore'
+import { useChromeStore } from '@/stores/useChromeStore'
+import { useFullscreenStore } from '@/stores/useFullscreenStore'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { Asset } from '@/mocks/asset'
@@ -80,6 +82,8 @@ export default function AssetLibraryPage() {
 
   // 影院模式：只记 id，资产数据始终从 store 派生，改名/评分才能实时反映在舞台上
   const [theaterAssetId, setTheaterAssetId] = useState<string | null>(null)
+  const chromeHidden = useChromeStore((state) => state.hidden)
+  const showAllChrome = useChromeStore((state) => state.showAll)
   const [selectedInfoAsset, setSelectedInfoAsset] = useState<Asset | null>(null)
   // 保留上一次的 asset 数据，让滑出动画期间内容不消失
   const [lastInfoAsset, setLastInfoAsset] = useState<Asset | null>(null)
@@ -141,6 +145,10 @@ export default function AssetLibraryPage() {
 
   const infoAsset = selectedInfoAsset || lastInfoAsset
   const infoCategoryPath = resolveCategoryPath(infoAsset)
+
+  // 进入影院模式时详情面板必须让位给舞台（固定态也一样收起），退出影院后按原状态回来
+  const infoPanelInFlow = infoPanelPinned && !theaterAsset
+  const infoPanelShown = !theaterAsset && (infoPanelPinned || !!selectedInfoAsset)
 
   const getIntersectingCardIds = useCallback((
     start: { x: number; y: number },
@@ -307,7 +315,11 @@ export default function AssetLibraryPage() {
 
   const handleCloseTheater = useCallback(() => {
     setTheaterAssetId(null)
-  }, [])
+    // 窗体全屏时保持收起，其余情况把菜单/筛选/详情放回原位
+    if (!useFullscreenStore.getState().isFullscreen) {
+      showAllChrome()
+    }
+  }, [showAllChrome])
 
   const handleBatchDeleteClick = useCallback(() => {
     setPendingDeleteIds(selectedAssetIds)
@@ -368,15 +380,19 @@ export default function AssetLibraryPage() {
   return (
     <AssetDragProvider onDrop={handleDropToCategory}>
       <div className="flex h-full flex-col" onClick={handlePageClick}>
-        <AssetToolbar
-          onOpenSettings={() => setShowSettings(true)}
-          hideLayoutControls={!!theaterAsset}
-        />
+        {!chromeHidden.filter && (
+          <AssetToolbar
+            onOpenSettings={() => setShowSettings(true)}
+            hideLayoutControls={!!theaterAsset}
+          />
+        )}
 
         {/* 横向用 clip、纵向用 hidden：clip 不产生滚动容器，轨道列表定位时的滚动才不会顺带把
             整行（含分类树）推出可视区；纵向仍需 hidden 保证这一层按可用高度收缩，不被内容撑高 */}
         <main className="relative flex flex-1 overflow-y-hidden overflow-x-clip">
-          <AssetCategoryTree onOpenCategoryManage={() => setShowCategoryManage(true)} />
+          {!chromeHidden.nav && (
+            <AssetCategoryTree onOpenCategoryManage={() => setShowCategoryManage(true)} />
+          )}
 
           <div className="relative flex min-h-0 min-w-0 flex-1">
             <div
@@ -435,12 +451,12 @@ export default function AssetLibraryPage() {
             <div
               className={cn(
                 'overflow-hidden transition-all duration-300 ease-in-out',
-                infoPanelPinned
+                infoPanelInFlow
                   ? 'w-[320px] shrink-0'
                   : 'absolute right-0 top-0 z-40 h-full w-[320px] shadow-lg',
-                !infoPanelPinned && (selectedInfoAsset
+                infoPanelShown
                   ? 'translate-x-0 opacity-100'
-                  : 'pointer-events-none translate-x-full opacity-0')
+                  : 'pointer-events-none translate-x-full opacity-0'
               )}
               data-info-panel
             >
@@ -459,7 +475,7 @@ export default function AssetLibraryPage() {
             </div>
 
             {theaterAsset && (
-              <div className="absolute inset-0 z-30 flex flex-col bg-background">
+              <div className="absolute inset-0 z-30 flex flex-col bg-theater">
                 <AssetTheaterView
                   asset={theaterAsset}
                   assets={filteredAssets}

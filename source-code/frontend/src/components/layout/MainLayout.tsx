@@ -13,12 +13,16 @@ import { ProcessConflictDialog } from '@/components/process/ProcessConflictDialo
 import { WorkspaceFrame } from '@/components/workspace/WorkspaceFrame'
 import { useProcessStore } from '@/stores/useProcessStore'
 import { useFullscreenStore } from '@/stores/useFullscreenStore'
+import { useChromeStore } from '@/stores/useChromeStore'
 
 export function MainLayout() {
   const { t } = useTranslation()
   const location = useLocation()
   const isWorkspacePage = location.pathname === '/workspace'
   const { isFullscreen, syncFullscreenState } = useFullscreenStore()
+  const navHidden = useChromeStore((state) => state.hidden.nav)
+  const hideAllChrome = useChromeStore((state) => state.hideAll)
+  const showAllChrome = useChromeStore((state) => state.showAll)
   
   // 全屏时标题栏是否显示（鼠标悬停时显示）
   const [showTitleBarInFullscreen, setShowTitleBarInFullscreen] = useState(false)
@@ -62,6 +66,15 @@ export function MainLayout() {
     }
   }, [isFullscreen])
 
+  // 窗体全屏 = 收起影院的三块界面构件；退出全屏再放回
+  useEffect(() => {
+    if (isFullscreen) {
+      hideAllChrome()
+    } else {
+      showAllChrome()
+    }
+  }, [isFullscreen, hideAllChrome, showAllChrome])
+
   // 决定是否显示标题栏
   const shouldShowTitleBar = !isFullscreen || showTitleBarInFullscreen
 
@@ -81,8 +94,8 @@ export function MainLayout() {
         />
       )}
 
-      {/* 侧边栏 - 全屏时隐藏，独立延伸到顶部 */}
-      {!isFullscreen && <SideBar />}
+      {/* 侧边栏 - 由影院模式的界面构件开关控制，全屏时默认收起 */}
+      {!navHidden && <SideBar />}
 
       {/* 右侧区域：标题栏 + 内容 */}
       <div className="flex flex-1 flex-col overflow-hidden">

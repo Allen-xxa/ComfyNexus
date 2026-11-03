@@ -16,14 +16,22 @@ import {
   Copy,
   Download,
   PanelLeftClose,
-  Star
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  PanelTopClose,
+  PanelTopOpen,
+  Star,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAssetStore } from '@/stores/useAssetStore'
+import { useChromeStore, type ChromeRegion } from '@/stores/useChromeStore'
 import { useElementSize } from '@/hooks/useElementSize'
 import { AssetInfoPanel } from './AssetInfoPanel'
 import type { AssetInfoPanelProps } from './AssetInfoPanel'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Asset } from '@/mocks/asset'
@@ -49,6 +57,15 @@ const STRIP_WIDTH = 108
 const STRIP_HEIGHT = 78
 const STRIP_GAP = 8
 
+const CHROME_REGIONS: ChromeRegion[] = ['nav', 'filter', 'detail']
+
+/** 图标表示"这次点击要做什么"：可见时是收起，收起时是展开 */
+const CHROME_ICONS: Record<ChromeRegion, { hide: LucideIcon; show: LucideIcon }> = {
+  nav: { hide: PanelLeftClose, show: PanelLeftOpen },
+  filter: { hide: PanelTopClose, show: PanelTopOpen },
+  detail: { hide: PanelRightClose, show: PanelRightOpen }
+}
+
 function safeString(value: unknown): string {
   if (value === null || value === undefined) return ''
   if (typeof value === 'string') return value
@@ -68,6 +85,8 @@ export function AssetTheaterView({
 }: AssetTheaterViewProps) {
   const { t } = useTranslation()
   const { exportWorkflow, exportWorkflowToPath, exportToPromptLibrary, toggleFavorite } = useAssetStore()
+  const chromeHidden = useChromeStore((state) => state.hidden)
+  const toggleChrome = useChromeStore((state) => state.toggle)
 
   const currentIndex = useMemo(
     () => assets.findIndex((item) => item.id === asset.id),
@@ -191,9 +210,9 @@ export function AssetTheaterView({
   }, [stripCellData])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
+    <div className="flex min-h-0 flex-1 flex-col bg-theater">
       <div className="flex min-h-0 flex-1">
-        <div className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-background p-6">
+        <div className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-theater p-6">
           {asset.type === 'video' ? (
             <video
               key={asset.id}
@@ -253,18 +272,43 @@ export function AssetTheaterView({
             </span>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-            title={t('asset.theater.exitHint')}
-            className="absolute right-4 top-4 gap-1.5 rounded-full bg-surface/80 backdrop-blur-sm"
-          >
-            <PanelLeftClose className="size-4" />
-            {t('asset.theater.exit')}
-          </Button>
+          <div className="absolute right-4 top-4 flex items-center gap-2">
+            <div className="flex items-center gap-0.5 rounded-full border border-border-subtle bg-surface/80 p-1 backdrop-blur-sm">
+              {CHROME_REGIONS.map((region) => {
+                const isHidden = chromeHidden[region]
+                const Icon = isHidden ? CHROME_ICONS[region].show : CHROME_ICONS[region].hide
+                return (
+                  <Button
+                    key={region}
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => toggleChrome(region)}
+                    title={`${t(isHidden ? 'asset.theater.chrome.show' : 'asset.theater.chrome.hide')} ${t(`asset.theater.chrome.${region}`)}`}
+                    className={cn(
+                      'size-7 rounded-full',
+                      isHidden ? 'text-muted-foreground' : 'text-foreground'
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </Button>
+                )
+              })}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              title={t('asset.theater.exitHint')}
+              className="gap-1.5 rounded-full bg-surface/80 backdrop-blur-sm"
+            >
+              <X className="size-4" />
+              {t('asset.theater.exit')}
+            </Button>
+          </div>
         </div>
 
+        {!chromeHidden.detail && (
         <aside className="flex w-[380px] shrink-0 flex-col border-l border-border-subtle bg-surface">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-subtle px-4 py-2">
             <span className="truncate text-sm font-medium text-foreground">{asset.filename}</span>
@@ -350,6 +394,7 @@ export function AssetTheaterView({
             />
           </div>
         </aside>
+        )}
       </div>
 
       <div ref={stripRef} className="h-[86px] shrink-0 border-t border-border-subtle bg-surface">
