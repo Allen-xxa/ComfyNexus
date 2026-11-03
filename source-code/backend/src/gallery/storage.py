@@ -201,7 +201,13 @@ class GalleryStorage:
         self.save()
         return category
 
-    def update_category(self, category_id: str, name: Optional[str] = None, folder_path: Optional[str] = None) -> Optional[AssetCategory]:
+    def update_category(
+        self,
+        category_id: str,
+        name: Optional[str] = None,
+        folder_path: Optional[str] = None,
+        parent_id: Optional[str] = None
+    ) -> Optional[AssetCategory]:
         """更新分类"""
         data = self.load()
         for category in data.categories:
@@ -210,9 +216,102 @@ class GalleryStorage:
                     category.name = name
                 if folder_path is not None:
                     category.folder_path = folder_path
+                if parent_id is not None:
+                    category.parent_id = parent_id or None
                 self.save()
                 return category
         return None
+
+    def relocate_category(
+        self,
+        category_id: str,
+        new_folder_path: str,
+        new_parent_id: Optional[str],
+        new_name: Optional[str] = None
+    ) -> dict:
+        """
+        分类换了物理位置之后，重写整棵子树的记账路径。
+
+        调用方负责磁盘目录已经移动到位；这里只改 assets.json，并且只在最后落盘一次
+        （逐个 update_asset 会把整个 JSON 重写 N 遍）。
+
+        Args:
+            category_id: 被移动/重命名的分类
+            new_folder_path: 移动后的相对路径，用 "/" 分隔；None 表示该分类没有物理目录
+            new_parent_id: 新的父分类 ID，"" 或 None 表示移到根级
+            new_name: 新的显示名（重命名时传入）
+
+        Returns:
+            {
+                "success": bool,
+                "moved_categories": int,
+                "moved_assets": int,
+                "error_message": str  # 仅失败时
+            }
+        """
+        data = self.load()
+        try:
+            category = next((c for c in data.categories if c.id == category_id), None)
+            if not category:
+                return {"success": False, "error_message": "分类不存在", "moved_categories": 0, "moved_assets": 0}
+
+            old_folder_path = category.folder_path
+            library_path = data.settings.library_path
+
+            affected_ids = [category_id]
+            if old_folder_path:
+                prefix = f"{old_folder_path}/"
+                for other in data.categories:
+                    if other.folder_path and other.folder_path.startswith(prefix):
+                        affected_ids.append(other.id)
+            affected_set = set(affected_ids)
+
+            moved_categories = 0
+            if new_folder_path is not None and old_folder_path:
+                new_prefix = f"{new_folder_path}/"
+                for other in data.categories:
+                    if other.id == category_id:
+                        other.folder_path = new_folder_path
+                        other.parent_id = new_parent_id or None
+                        if new_name is not None:
+                            other.name = new_name
+                        moved_categories += 1
+                    elif other.folder_path and other.folder_path.startswith(f"{old_folder_path}/"):
+                        other.folder_path = new_prefix + other.folder_path[len(prefix):]
+                        moved_categories += 1
+            else:
+                category.parent_id = new_parent_id or None
+                if new_name is not None:
+                    category.name = new_name
+                moved_categories = 1
+
+            moved_assets = 0
+            moved_asset_paths: list[dict] = []
+            if old_folder_path and new_folder_path and library_path:
+                old_dir = Path(library_path) / old_folder_path
+                new_dir = Path(library_path) / new_folder_path
+                for asset in data.assets:
+                    if asset.category_id not in affected_set:
+                        continue
+                    try:
+                        rel = Path(asset.file_path).relative_to(old_dir)
+                    except ValueError:
+                        continue
+                    asset.file_path = str(new_dir / rel)
+                    moved_assets += 1
+                    moved_asset_paths.append({"id": asset.id, "filePath": asset.file_path})
+
+            self.save()
+            return {
+                "success": True,
+                "moved_categories": moved_categories,
+                "moved_assets": moved_assets,
+                "asset_paths": moved_asset_paths
+            }
+        except Exception as e:
+            logger.error(f"[GalleryStorage] 重定位分类失败: {e}")
+            self._data = None
+            return {"success": False, "error_message": str(e), "moved_categories": 0, "moved_assets": 0}
 
     def get_category_by_id(self, category_id: str) -> Optional[AssetCategory]:
         """根据 ID 获取分类"""
@@ -243,6 +342,83 @@ class GalleryStorage:
                 return True
         return False
 
+    def remove_category_promote_children(
+        self,
+        category_id: str,
+        new_parent_id: Optional[str],
+        new_prefix: str,
+        library_path: Optional[str],
+        assets_target_category_id: Optional[str] = None
+    ) -> dict:
+        """
+        删除一个分类，但保留它的子分类：子分类整体上浮一级，直属资产跟着文件一起归到上级分类。
+
+        调用方已经把磁盘目录内容上移；这里把 assets.json 对上新的层级，只落盘一次。
+
+        Returns:
+            {"success": bool, "removed_categories": int, "reparented_children": int,
+             "orphaned_assets": int, "moved_assets": int, "error_message": str}
+        """
+        data = self.load()
+        try:
+            category = next((c for c in data.categories if c.id == category_id), None)
+            if not category:
+                return {"success": False, "error_message": "分类不存在"}
+
+            removed_folder_path = category.folder_path
+            old_ids = {category_id}
+
+            moved_assets = 0
+            moved_asset_paths: list[dict] = []
+            if removed_folder_path:
+                old_full = f"{removed_folder_path}/"
+                prefix = f"{new_prefix}/" if new_prefix else ""
+                for other in data.categories:
+                    if other.folder_path and other.folder_path.startswith(old_full):
+                        other.folder_path = prefix + other.folder_path[len(old_full):]
+                if library_path:
+                    old_dir = Path(library_path) / removed_folder_path
+                    new_dir = Path(library_path) / new_prefix if new_prefix else Path(library_path)
+                    for asset in data.assets:
+                        try:
+                            rel = Path(asset.file_path).relative_to(old_dir)
+                        except ValueError:
+                            continue
+                        asset.file_path = str(new_dir / rel)
+                        moved_assets += 1
+                        moved_asset_paths.append({"id": asset.id, "filePath": asset.file_path})
+
+            orphaned_assets = 0
+            for asset in data.assets:
+                if asset.category_id == category_id:
+                    asset.category_id = assets_target_category_id
+                    orphaned_assets += 1
+                    moved_asset_paths.append({
+                        "id": asset.id,
+                        "filePath": asset.file_path,
+                        "categoryId": assets_target_category_id
+                    })
+
+            reparented_children = 0
+            for other in data.categories:
+                if other.parent_id == category_id:
+                    other.parent_id = new_parent_id
+                    reparented_children += 1
+
+            data.categories = [c for c in data.categories if c.id not in old_ids]
+            self.save()
+            return {
+                "success": True,
+                "removed_categories": 1,
+                "reparented_children": reparented_children,
+                "orphaned_assets": orphaned_assets,
+                "moved_assets": moved_assets,
+                "asset_paths": moved_asset_paths
+            }
+        except Exception as e:
+            logger.error(f"[GalleryStorage] 删除分类并上浮子分类失败: {e}")
+            return {"success": False, "error_message": str(e)}
+
     def get_category_content_info(self, category_id: str) -> dict:
         """获取分类内容信息（资产数量、子分类ID列表）"""
         data = self.load()
@@ -254,33 +430,6 @@ class GalleryStorage:
             "asset_count": asset_count,
             "child_ids": child_ids,
             "child_count": len(child_ids)
-        }
-
-    def delete_category_cascade(self, category_id: str) -> dict:
-        """级联删除分类（包括子分类和资产）"""
-        data = self.load()
-        
-        ids_to_delete = [category_id]
-        
-        def collect_child_ids(parent_id: str):
-            for cat in data.categories:
-                if cat.parent_id == parent_id:
-                    ids_to_delete.append(cat.id)
-                    collect_child_ids(cat.id)
-        
-        collect_child_ids(category_id)
-        
-        deleted_asset_count = sum(1 for a in data.assets if a.category_id in ids_to_delete)
-        
-        data.assets = [a for a in data.assets if a.category_id not in ids_to_delete]
-        data.categories = [c for c in data.categories if c.id not in ids_to_delete]
-        
-        self.save()
-        
-        return {
-            "success": True,
-            "deleted_categories": len(ids_to_delete),
-            "deleted_assets": deleted_asset_count
         }
 
     def get_assets(self) -> list[Asset]:

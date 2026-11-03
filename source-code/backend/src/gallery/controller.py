@@ -873,6 +873,13 @@ class GalleryController:
             logger.error(f"[GalleryController] 导出 ZIP 失败: {e}")
             return {"success": False, "error_message": str(e)}
 
+    @staticmethod
+    def _sanitize_category_name(name: str) -> str:
+        """分类名会直接当成文件夹名，去掉 Windows 目录名的非法字符"""
+        import re
+        safe_name = re.sub(r'[<>:"/\\|?*]', "_", name or "").strip(" .")
+        return safe_name
+
     def gallery_get_categories(self) -> dict:
         """
         获取分类列表
@@ -908,21 +915,32 @@ class GalleryController:
             settings = gallery_storage.get_settings()
             library_path = settings.library_path
 
+            safe_name = self._sanitize_category_name(name)
+            if not safe_name:
+                return {"success": False, "error_message": "无效的分类名称"}
+
             # 构建文件夹路径
             if parent_id:
                 parent_category = gallery_storage.get_category_by_id(parent_id)
-                if parent_category and parent_category.folder_path:
-                    folder_path = f"{parent_category.folder_path}/{name}"
+                if not parent_category:
+                    return {"success": False, "error_message": "父分类不存在"}
+                if parent_category.folder_path:
+                    folder_path = f"{parent_category.folder_path}/{safe_name}"
                 else:
-                    folder_path = name
+                    folder_path = safe_name
             else:
-                folder_path = name
+                folder_path = safe_name
+
+            if gallery_storage.get_category_by_folder_path(folder_path):
+                return {"success": False, "error_message": "同级已存在同名分类"}
 
             if library_path:
                 folder_full_path = Path(library_path) / folder_path
+                if folder_full_path.exists():
+                    return {"success": False, "error_message": "目标位置已存在同名文件夹"}
                 folder_full_path.mkdir(parents=True, exist_ok=True)
 
-            category = gallery_storage.add_category(name, parent_id, folder_path)
+            category = gallery_storage.add_category(safe_name, parent_id, folder_path)
             return {"success": True, "category": category.to_dict()}
         except Exception as e:
             logger.error(f"[GalleryController] 创建分类失败: {e}")
@@ -930,7 +948,7 @@ class GalleryController:
 
     def gallery_update_category(self, category_id: str, name: str = None) -> dict:
         """
-        更新分类（同时重命名物理文件夹）
+        重命名分类（同时重命名物理文件夹）
 
         Args:
             category_id: 分类ID
@@ -947,29 +965,137 @@ class GalleryController:
             if not category:
                 return {"success": False, "error_message": "分类不存在"}
 
-            if name and category.folder_path:
-                settings = gallery_storage.get_settings()
-                library_path = settings.library_path
+            if not name:
+                return {"success": True, "category": category.to_dict()}
 
-                if library_path:
-                    old_folder = Path(library_path) / category.folder_path
-                    new_folder = Path(library_path) / name
+            safe_name = self._sanitize_category_name(name)
+            if not safe_name:
+                return {"success": False, "error_message": "无效的分类名称"}
 
-                    if old_folder.exists() and old_folder != new_folder:
-                        old_folder.rename(new_folder)
+            old_folder_path = category.folder_path
+            if not old_folder_path:
+                gallery_storage.update_category(category_id, safe_name)
+                return {"success": True, "category": category.to_dict()}
 
-                        for asset in gallery_storage.get_assets():
-                            if asset.category_id == category_id:
-                                old_path = Path(asset.file_path)
-                                if old_path.exists():
-                                    new_path = new_folder / old_path.name
-                                    gallery_storage.update_asset(asset.id, file_path=str(new_path))
+            settings = gallery_storage.get_settings()
+            if not settings.library_path:
+                gallery_storage.update_category(category_id, safe_name)
+                return {"success": True, "category": category.to_dict()}
 
-                category = gallery_storage.update_category(category_id, name, name)
+            # 只换最后一段：旧实现把 folder_path 直接写成 name，嵌套分类会被挪到根目录，
+            # 子分类和资产的路径全部对不上。
+            parent_dir = str(Path(old_folder_path).parent).replace("\\", "/")
+            parent_dir = "" if parent_dir == "." else parent_dir
+            new_folder_path = f"{parent_dir}/{safe_name}" if parent_dir else safe_name
+            if new_folder_path == old_folder_path:
+                gallery_storage.update_category(category_id, safe_name)
+                return {"success": True, "category": category.to_dict()}
 
-            return {"success": True, "category": category.to_dict() if category else None}
+            library = Path(settings.library_path)
+            old_dir = library / old_folder_path
+            new_dir = library / new_folder_path
+            if new_dir.exists():
+                return {"success": False, "error_message": "目标位置已存在同名文件夹"}
+
+            if not old_dir.exists():
+                # 磁盘上已经没有这个目录了，只改记账信息
+                relocate = gallery_storage.relocate_category(category_id, new_folder_path, category.parent_id, safe_name)
+                refreshed = gallery_storage.get_category_by_id(category_id)
+                return {"success": True, "category": refreshed.to_dict() if refreshed else None,
+                        "asset_paths": relocate.get("asset_paths", [])}
+
+            old_dir.rename(new_dir)
+            result = gallery_storage.relocate_category(category_id, new_folder_path, category.parent_id, safe_name)
+            if not result.get("success"):
+                new_dir.rename(old_dir)
+                return {"success": False, "error_message": result.get("error_message", "更新分类失败")}
+
+            refreshed = gallery_storage.get_category_by_id(category_id)
+            return {"success": True, "category": refreshed.to_dict() if refreshed else None,
+                    "asset_paths": result.get("asset_paths", [])}
         except Exception as e:
             logger.error(f"[GalleryController] 更新分类失败: {e}")
+            return {"success": False, "error_message": str(e)}
+
+    def gallery_move_category(self, category_id: str, parent_id: str = None) -> dict:
+        """
+        移动分类到新的父级（parent_id 为空表示移到根级），同时移动物理文件夹
+
+        Args:
+            category_id: 分类ID
+            parent_id: 目标父分类ID
+
+        Returns:
+            {
+                "success": bool,
+                "category": dict
+            }
+        """
+        try:
+            category = gallery_storage.get_category_by_id(category_id)
+            if not category:
+                return {"success": False, "error_message": "分类不存在"}
+            if category.is_system:
+                return {"success": False, "error_message": "系统分类不可移动"}
+
+            target_parent = None
+            parent_folder_path = ""
+            if parent_id:
+                target_parent = gallery_storage.get_category_by_id(parent_id)
+                if not target_parent:
+                    return {"success": False, "error_message": "目标父分类不存在"}
+                if target_parent.id == category.id:
+                    return {"success": False, "error_message": "不能移动到自身"}
+                parent_folder_path = target_parent.folder_path or ""
+
+            settings = gallery_storage.get_settings()
+            if not settings.library_path:
+                gallery_storage.update_category(category_id, parent_id=parent_id or "")
+                return {"success": True, "category": category.to_dict()}
+
+            library = Path(settings.library_path)
+            old_folder_path = category.folder_path
+            if not old_folder_path:
+                gallery_storage.relocate_category(category_id, None, parent_id, None)
+                refreshed = gallery_storage.get_category_by_id(category_id)
+                return {"success": True, "category": refreshed.to_dict() if refreshed else None}
+
+            # 防环：不能挪进自己的子树（folder_path 是库内相对路径，前缀即血缘）
+            if parent_folder_path and (
+                parent_folder_path == old_folder_path
+                or parent_folder_path.startswith(f"{old_folder_path}/")
+            ):
+                return {"success": False, "error_message": "不能移动到自身或其子分类下"}
+
+            new_folder_path = f"{parent_folder_path}/{category.name}" if parent_folder_path else category.name
+            if new_folder_path == old_folder_path:
+                refreshed = gallery_storage.get_category_by_id(category_id)
+                return {"success": True, "category": refreshed.to_dict() if refreshed else None}
+
+            old_dir = library / old_folder_path
+            new_dir = library / new_folder_path
+            if new_dir.exists():
+                return {"success": False, "error_message": "目标位置已存在同名文件夹"}
+
+            if not old_dir.exists():
+                relocate = gallery_storage.relocate_category(category_id, new_folder_path, parent_id, None)
+                refreshed = gallery_storage.get_category_by_id(category_id)
+                return {"success": True, "category": refreshed.to_dict() if refreshed else None,
+                        "asset_paths": relocate.get("asset_paths", [])}
+
+            new_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(old_dir), str(new_dir))
+            result = gallery_storage.relocate_category(category_id, new_folder_path, parent_id, None)
+            if not result.get("success"):
+                shutil.move(str(new_dir), str(old_dir))
+                return {"success": False, "error_message": result.get("error_message", "移动分类失败")}
+
+            logger.info(f"[GalleryController] 移动分类: {old_folder_path} -> {new_folder_path}")
+            refreshed = gallery_storage.get_category_by_id(category_id)
+            return {"success": True, "category": refreshed.to_dict() if refreshed else None,
+                    "asset_paths": result.get("asset_paths", [])}
+        except Exception as e:
+            logger.error(f"[GalleryController] 移动分类失败: {e}")
             return {"success": False, "error_message": str(e)}
 
     def gallery_get_category_content_info(self, category_id: str) -> dict:
@@ -994,30 +1120,71 @@ class GalleryController:
             logger.error(f"[GalleryController] 获取分类内容信息失败: {e}")
             return {"success": False, "error_message": str(e)}
 
-    def gallery_delete_category(self, category_id: str, cascade: bool = True) -> dict:
+    def gallery_delete_category(self, category_id: str, move_contents_to_parent: bool = True) -> dict:
         """
-        删除分类
+        删除分类：先把内容上浮一级，再删腾空的目录
+
+        分类就是资产库里的真实文件夹，所以删除必须同时处理磁盘。旧实现只清元数据、
+        目录还在，下一次扫描又会把它连同里面的文件重建出来，等于删不掉。
 
         Args:
             category_id: 分类ID
-            cascade: 是否级联删除（包括子分类和资产）
+            move_contents_to_parent: True 时把子分类和文件移到上一级；
+                False 时只允许删除已经腾空的分类
 
         Returns:
             {
                 "success": bool,
-                "deleted_categories": int,  # 仅 cascade=True 时返回
-                "deleted_assets": int       # 仅 cascade=True 时返回
+                "moved_children": int,
+                "moved_assets": int
             }
         """
         try:
-            if cascade:
-                result = gallery_storage.delete_category_cascade(category_id)
-                return result
-            else:
-                success = gallery_storage.delete_category(category_id)
-                if success:
-                    return {"success": True}
-                return {"success": False, "error_message": "无法删除系统分类或分类不存在"}
+            category = gallery_storage.get_category_by_id(category_id)
+            if not category:
+                return {"success": False, "error_message": "分类不存在"}
+            if category.is_system:
+                return {"success": False, "error_message": "系统分类不可删除"}
+
+            settings = gallery_storage.get_settings()
+            library_path = settings.library_path or None
+            folder_path = category.folder_path
+            parent_id = category.parent_id
+            parent_folder_path = ""
+            if parent_id:
+                parent = gallery_storage.get_category_by_id(parent_id)
+                parent_folder_path = (parent.folder_path if parent else "") or ""
+
+            if library_path and folder_path:
+                old_dir = Path(library_path) / folder_path
+                if old_dir.exists():
+                    entries = sorted(old_dir.iterdir(), key=lambda p: (p.is_file(), p.name))
+                    if not move_contents_to_parent:
+                        if entries:
+                            return {"success": False, "error_message": "分类不为空，请先移出其中的内容"}
+                    else:
+                        target_parent = Path(library_path) / parent_folder_path if parent_folder_path else Path(library_path)
+                        target_parent.mkdir(parents=True, exist_ok=True)
+                        conflicts = [p.name for p in entries if (target_parent / p.name).exists()]
+                        if conflicts:
+                            return {"success": False, "error_message": f"上级目录已存在同名条目：{', '.join(conflicts)}"}
+                        for entry in entries:
+                            shutil.move(str(entry), str(target_parent / entry.name))
+                    if old_dir.exists():
+                        old_dir.rmdir()
+
+            result = gallery_storage.remove_category_promote_children(
+                category_id,
+                parent_id,
+                parent_folder_path,
+                library_path,
+                parent_id
+            )
+            if not result.get("success"):
+                return {"success": False, "error_message": result.get("error_message", "删除分类失败")}
+            return {"success": True, "moved_children": result.get("reparented_children", 0),
+                    "moved_assets": result.get("moved_assets", 0),
+                    "asset_paths": result.get("asset_paths", [])}
         except Exception as e:
             logger.error(f"[GalleryController] 删除分类失败：{e}")
             return {"success": False, "error_message": str(e)}

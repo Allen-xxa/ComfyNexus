@@ -72,6 +72,16 @@ export interface PromptParamsPayload {
   workflow_path?: string
 }
 
+/**
+ * 分类改名/移动/删除会连带搬动磁盘目录，后端把换了位置的资产新路径回传，
+ * 前端就地更新，避免整库重载导致骨架屏和滚动位置丢失。
+ */
+export type GalleryMovedAssetPath = {
+  id: string
+  filePath: string
+  categoryId?: string | null
+}
+
 export interface PyWebViewAPI {
   // 应用相关 API
   ping: () => Promise<{ status: string }>;
@@ -1631,6 +1641,21 @@ export interface PyWebViewAPI {
       sortOrder: number
       folderPath?: string
     }
+    asset_paths?: GalleryMovedAssetPath[]
+    error_message?: string
+  }>;
+
+  gallery_move_category: (categoryId: string, parentId?: string | null) => Promise<{
+    success: boolean
+    category?: {
+      id: string
+      name: string
+      isSystem: boolean
+      parentId: string | null
+      sortOrder: number
+      folderPath?: string
+    }
+    asset_paths?: GalleryMovedAssetPath[]
     error_message?: string
   }>;
 
@@ -1642,10 +1667,11 @@ export interface PyWebViewAPI {
     error_message?: string
   }>;
 
-  gallery_delete_category: (categoryId: string, cascade?: boolean) => Promise<{
+  gallery_delete_category: (categoryId: string, moveContentsToParent?: boolean) => Promise<{
     success: boolean
-    deleted_categories?: number
-    deleted_assets?: number
+    moved_children?: number
+    moved_assets?: number
+    asset_paths?: GalleryMovedAssetPath[]
     error_message?: string
   }>;
 

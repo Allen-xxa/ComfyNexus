@@ -7674,12 +7674,16 @@ class Api:
         return self._gallery_controller.gallery_create_category(name, parent_id)
 
     def gallery_update_category(self, category_id: str, name: str = None) -> dict:
-        """更新分类"""
+        """重命名分类"""
         return self._gallery_controller.gallery_update_category(category_id, name)
 
-    def gallery_delete_category(self, category_id: str, cascade: bool = True) -> dict:
-        """删除分类"""
-        return self._gallery_controller.gallery_delete_category(category_id, cascade)
+    def gallery_move_category(self, category_id: str, parent_id: str = None) -> dict:
+        """移动分类到新的父级"""
+        return self._gallery_controller.gallery_move_category(category_id, parent_id)
+
+    def gallery_delete_category(self, category_id: str, move_contents_to_parent: bool = True) -> dict:
+        """删除分类（内容先上浮一级）"""
+        return self._gallery_controller.gallery_delete_category(category_id, move_contents_to_parent)
 
     def gallery_get_thumbnail(self, asset_id: str):
         """获取资产缩略图（返回 Flask Response）"""

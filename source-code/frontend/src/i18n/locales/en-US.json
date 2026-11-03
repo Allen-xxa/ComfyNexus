@@ -3940,7 +3940,17 @@
       "favorites": "Favorites",
       "uncategorized": "Uncategorized",
       "localLibrary": "Local Library",
-      "referenceLibrary": "Reference Library"
+      "referenceLibrary": "Reference Library",
+      "namePlaceholder": "Category name",
+      "actions": "Category actions",
+      "newRoot": "New category",
+      "newChild": "New subcategory",
+      "rename": "Rename",
+      "moveToRoot": "Move to root",
+      "delete": "Delete",
+      "deleteTitle": "Delete category",
+      "deleteConfirm": "Delete category \"{name}\"?",
+      "deleteWithContent": "Category \"{name}\" still holds {assetCount} assets and {childCount} subcategories. Deleting moves them up one level (asset files are kept). Delete anyway?"
     },
     "categoryManage": {
       "title": "Manage Categories",
@@ -3992,7 +4002,18 @@
       "exportSuccess": "Exported successfully",
       "exportFailed": "Export failed",
       "importToPromptLibrarySuccess": "Imported to Prompt Library",
-      "importToPromptLibraryFailed": "Failed to import to Prompt Library"
+      "importToPromptLibraryFailed": "Failed to import to Prompt Library",
+      "moveSuccess": "Moved {count} assets",
+      "moveFailed": "Failed to move assets",
+      "favoriteFailed": "Failed to update favorite",
+      "createCategorySuccess": "Category created",
+      "renameCategorySuccess": "Category renamed",
+      "moveCategorySuccess": "Category moved",
+      "deleteCategorySuccess": "Category deleted",
+      "createCategoryFailed": "Failed to create category",
+      "renameCategoryFailed": "Failed to rename category",
+      "moveCategoryFailed": "Failed to move category",
+      "deleteCategoryFailed": "Failed to delete category"
     },
     "noPromptDetected": "No prompt detected",
     "noPromptDetectedDescription": "No positive or negative prompt was detected in this asset. You can still import the preview image and generation parameters (model, sampler, steps, etc.) and fill in the prompt later.",

@@ -18,12 +18,12 @@ import {
   AssetInfoPanel,
   AssetDragProvider,
   AssetDragLayer,
-  AssetSelectionBox,
-  AssetCategoryManageDialog
+  AssetSelectionBox
 } from '@/components/asset'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Button } from '@/components/ui/Button'
 import { useAssetStore } from '@/stores/useAssetStore'
+import type { CategoryDeleteRequest } from '@/components/asset/AssetCategoryTree'
 import { useChromeStore } from '@/stores/useChromeStore'
 import { useFullscreenStore } from '@/stores/useFullscreenStore'
 import { toast } from 'sonner'
@@ -74,6 +74,7 @@ export default function AssetLibraryPage() {
     categories,
     createCategory,
     updateCategory,
+    moveCategory,
     deleteCategory,
     openLocation,
     incrementalScanLibrary,
@@ -94,7 +95,7 @@ export default function AssetLibraryPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
   const [showSettings, setShowSettings] = useState(false)
-  const [showCategoryManage, setShowCategoryManage] = useState(false)
+  const [pendingCategoryDelete, setPendingCategoryDelete] = useState<CategoryDeleteRequest | null>(null)
 
   const [infoPanelPinned, setInfoPanelPinned] = useState(() => {
     return localStorage.getItem('asset-info-panel-pinned') === 'true'
@@ -275,6 +276,45 @@ export default function AssetLibraryPage() {
     }
   }, [moveToCategory, toggleFavorite, t])
 
+  const notifyCategoryOp = useCallback((
+    result: { success: boolean; error?: string },
+    successKey: string,
+    failedKey: string
+  ) => {
+    if (result.success) {
+      toast.success(t(successKey))
+    } else {
+      toast.error(result.error || t(failedKey))
+    }
+    return result.success
+  }, [t])
+
+  const handleCreateCategory = useCallback(async (parentId: string | null, name: string) => {
+    notifyCategoryOp(await createCategory(name, parentId ?? undefined), 'asset.toast.createCategorySuccess', 'asset.toast.createCategoryFailed')
+  }, [createCategory, notifyCategoryOp])
+
+  const handleRenameCategory = useCallback(async (id: string, name: string) => {
+    notifyCategoryOp(await updateCategory(id, name), 'asset.toast.renameCategorySuccess', 'asset.toast.renameCategoryFailed')
+  }, [updateCategory, notifyCategoryOp])
+
+  const handleMoveCategory = useCallback(async (id: string, newParentId: string | null) => {
+    notifyCategoryOp(await moveCategory(id, newParentId), 'asset.toast.moveCategorySuccess', 'asset.toast.moveCategoryFailed')
+  }, [moveCategory, notifyCategoryOp])
+
+  const handleDeleteCategoryRequest = useCallback((request: CategoryDeleteRequest) => {
+    setPendingCategoryDelete(request)
+  }, [])
+
+  const handleConfirmDeleteCategory = useCallback(async () => {
+    if (!pendingCategoryDelete) return
+    const result = await deleteCategory(pendingCategoryDelete.id)
+    if (result.success && selectedCategoryId === pendingCategoryDelete.id) {
+      setSelectedCategoryId('all')
+    }
+    notifyCategoryOp(result, 'asset.toast.deleteCategorySuccess', 'asset.toast.deleteCategoryFailed')
+    setPendingCategoryDelete(null)
+  }, [pendingCategoryDelete, deleteCategory, selectedCategoryId, setSelectedCategoryId, notifyCategoryOp])
+
   // 单击延迟处理：避免悬浮 info 面板遮挡双击
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -391,7 +431,12 @@ export default function AssetLibraryPage() {
             整行（含分类树）推出可视区；纵向仍需 hidden 保证这一层按可用高度收缩，不被内容撑高 */}
         <main className="relative flex flex-1 overflow-y-hidden overflow-x-clip">
           {!chromeHidden.nav && (
-            <AssetCategoryTree onOpenCategoryManage={() => setShowCategoryManage(true)} />
+            <AssetCategoryTree
+              onCreateCategory={handleCreateCategory}
+              onRenameCategory={handleRenameCategory}
+              onMoveCategory={handleMoveCategory}
+              onDeleteCategoryRequest={handleDeleteCategoryRequest}
+            />
           )}
 
           <div className="relative flex min-h-0 min-w-0 flex-1">
@@ -506,14 +551,21 @@ export default function AssetLibraryPage() {
 
         <ScanProgressBar />
 
-        <AssetCategoryManageDialog
-          open={showCategoryManage}
-          onOpenChange={setShowCategoryManage}
-          categories={categories}
-          assets={assets}
-          onCreateCategory={createCategory}
-          onUpdateCategory={updateCategory}
-          onDeleteCategory={deleteCategory}
+        <ConfirmDialog
+          open={!!pendingCategoryDelete}
+          onOpenChange={(open) => { if (!open) setPendingCategoryDelete(null) }}
+          title={t('asset.category.deleteTitle')}
+          description={
+            pendingCategoryDelete && (pendingCategoryDelete.assetCount > 0 || pendingCategoryDelete.childCount > 0)
+              ? t('asset.category.deleteWithContent', {
+                  name: pendingCategoryDelete.name,
+                  assetCount: pendingCategoryDelete.assetCount,
+                  childCount: pendingCategoryDelete.childCount
+                })
+              : t('asset.category.deleteConfirm', { name: pendingCategoryDelete?.name || '' })
+          }
+          variant="destructive"
+          onConfirm={handleConfirmDeleteCategory}
         />
 
         <ConfirmDialog

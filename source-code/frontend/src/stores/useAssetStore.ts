@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import i18n from '@/i18n'
 import { mockAssets, mockAssetCategories } from '@/mocks/asset'
 import type { Asset, AssetCategory, AssetFilterTag, GallerySettings } from '@/mocks/asset'
+import type { GalleryMovedAssetPath } from '@/types/bridge'
 
 const extractFilterTags = (assets: Asset[]): AssetFilterTag[] => {
   const tagSet = new Set<string>()
@@ -29,6 +30,12 @@ const extractFilterTags = (assets: Asset[]): AssetFilterTag[] => {
 export type SortBy = 'name' | 'createdAt' | 'size'
 
 export type AssetViewMode = 'masonry' | 'grid'
+
+/** 分类是磁盘上的真实文件夹，失败原因（同名冲突等）由后端给出，直接透给用户 */
+export interface CategoryOpResult {
+  success: boolean
+  error?: string
+}
 
 export type AssetGalleryItem =
   | { kind: 'folder'; category: AssetCategory; assetCount: number }
@@ -131,9 +138,10 @@ interface AssetStore {
   updatePreviewBlurred: (assetId: string, blurred: boolean) => Promise<boolean>
   updateAssetInfo: (assetId: string, data: { filename?: string; description?: string; tags?: string[]; rating?: number }) => Promise<{ success: boolean; asset?: Asset; error_message?: string }>
   setThumbnailSize: (size: number) => void
-  createCategory: (name: string, parentId?: string) => Promise<boolean>
-  updateCategory: (categoryId: string, name?: string) => Promise<boolean>
-  deleteCategory: (categoryId: string, cascade?: boolean) => Promise<boolean>
+  createCategory: (name: string, parentId?: string) => Promise<CategoryOpResult>
+  updateCategory: (categoryId: string, name: string) => Promise<CategoryOpResult>
+  moveCategory: (categoryId: string, parentId: string | null) => Promise<CategoryOpResult>
+  deleteCategory: (categoryId: string, moveContentsToParent?: boolean) => Promise<CategoryOpResult>
   pushImageToComfyUI: (assetId: string) => Promise<{ success: boolean; filename?: string; error_message?: string }>
 }
 
@@ -201,6 +209,24 @@ const getDirectChildCategories = (categories: AssetCategory[], selectedCategoryI
 const getCategoryAssetCount = (assets: Asset[], categories: AssetCategory[], categoryId: string): number => {
   const categoryIds = getChildCategoryIds(categories, categoryId)
   return assets.filter((asset) => asset.categoryId && categoryIds.includes(asset.categoryId)).length
+}
+
+/** 分类改名/移动/删除会搬动磁盘目录，就地同步受影响资产，省掉一次整库重载 */
+const applyMovedAssetPaths = (
+  assets: Asset[],
+  moved?: GalleryMovedAssetPath[]
+): Asset[] => {
+  if (!moved?.length) return assets
+  const byId = new Map(moved.map((entry) => [entry.id, entry]))
+  return assets.map((asset) => {
+    const entry = byId.get(asset.id)
+    if (!entry) return asset
+    return {
+      ...asset,
+      filePath: entry.filePath,
+      categoryId: entry.categoryId === undefined ? asset.categoryId : entry.categoryId
+    }
+  })
 }
 
 export const useAssetStore = create<AssetStore>((set, get) => ({
@@ -1224,10 +1250,8 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   setRatingFilter: (filter) => set({ ratingFilter: filter }),
 
   createCategory: async (name, parentId) => {
-    console.log('[useAssetStore] 创建分类:', name, parentId)
     try {
       if (isDevelopment()) {
-        await new Promise((resolve) => setTimeout(resolve, 200))
         const newCategory: AssetCategory = {
           id: `cat-${Date.now()}`,
           name,
@@ -1236,67 +1260,84 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           sortOrder: get().categories.filter(c => !c.parentId).length
         }
         set((state) => ({ categories: [...state.categories, newCategory] }))
-        return true
+        return { success: true }
       }
 
       const result = await window.pywebview.api.gallery_create_category(name, parentId)
       if (result.success) {
         await get().refreshCategories()
-        return true
+        return { success: true }
       }
-      return false
+      return { success: false, error: result.error_message }
     } catch (error) {
       console.error('[useAssetStore] 创建分类异常:', error)
-      return false
+      return { success: false, error: String(error) }
     }
   },
 
   updateCategory: async (categoryId, name) => {
-    console.log('[useAssetStore] 更新分类:', categoryId, name)
     try {
       if (isDevelopment()) {
-        await new Promise((resolve) => setTimeout(resolve, 200))
         set((state) => ({
-          categories: state.categories.map((c) =>
-            c.id === categoryId ? { ...c, name: name || c.name } : c
-          )
+          categories: state.categories.map((c) => (c.id === categoryId ? { ...c, name } : c))
         }))
-        return true
+        return { success: true }
       }
 
       const result = await window.pywebview.api.gallery_update_category(categoryId, name)
       if (result.success) {
+        set((state) => ({ assets: applyMovedAssetPaths(state.assets, result.asset_paths) }))
         await get().refreshCategories()
-        return true
+        return { success: true }
       }
-      return false
+      return { success: false, error: result.error_message }
     } catch (error) {
       console.error('[useAssetStore] 更新分类异常:', error)
-      return false
+      return { success: false, error: String(error) }
     }
   },
 
-  deleteCategory: async (categoryId, cascade = true) => {
-    console.log('[useAssetStore] 删除分类:', categoryId, 'cascade:', cascade)
+  moveCategory: async (categoryId, parentId) => {
     try {
       if (isDevelopment()) {
-        await new Promise((resolve) => setTimeout(resolve, 200))
+        set((state) => ({
+          categories: state.categories.map((c) => (c.id === categoryId ? { ...c, parentId } : c))
+        }))
+        return { success: true }
+      }
+
+      const result = await window.pywebview.api.gallery_move_category(categoryId, parentId)
+      if (result.success) {
+        set((state) => ({ assets: applyMovedAssetPaths(state.assets, result.asset_paths) }))
+        await get().refreshCategories()
+        return { success: true }
+      }
+      return { success: false, error: result.error_message }
+    } catch (error) {
+      console.error('[useAssetStore] 移动分类异常:', error)
+      return { success: false, error: String(error) }
+    }
+  },
+
+  deleteCategory: async (categoryId, moveContentsToParent = true) => {
+    try {
+      if (isDevelopment()) {
         set((state) => ({
           categories: state.categories.filter((c) => c.id !== categoryId)
         }))
-        return true
+        return { success: true }
       }
 
-      const result = await window.pywebview.api.gallery_delete_category(categoryId, cascade)
+      const result = await window.pywebview.api.gallery_delete_category(categoryId, moveContentsToParent)
       if (result.success) {
+        set((state) => ({ assets: applyMovedAssetPaths(state.assets, result.asset_paths) }))
         await get().refreshCategories()
-        await get().loadData()
-        return true
+        return { success: true }
       }
-      return false
+      return { success: false, error: result.error_message }
     } catch (error) {
       console.error('[useAssetStore] 删除分类异常:', error)
-      return false
+      return { success: false, error: String(error) }
     }
   },
 

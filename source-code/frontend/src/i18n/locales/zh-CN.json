@@ -4535,7 +4535,17 @@
       "favorites": "收藏",
       "uncategorized": "未分类",
       "localLibrary": "本地生成库",
-      "referenceLibrary": "参考资产库"
+      "referenceLibrary": "参考资产库",
+      "namePlaceholder": "输入分类名称",
+      "actions": "分类操作",
+      "newRoot": "新建分类",
+      "newChild": "新建子分类",
+      "rename": "重命名",
+      "moveToRoot": "移到根目录",
+      "delete": "删除",
+      "deleteTitle": "删除分类",
+      "deleteConfirm": "确定要删除分类「{name}」吗？",
+      "deleteWithContent": "分类「{name}」下还有 {assetCount} 个资源、{childCount} 个子分类。删除后它们会跟着目录一起上浮到上一级（不会删除资源文件本身）。确认删除？"
     },
     "categoryManage": {
       "title": "管理分类",
@@ -4587,7 +4597,18 @@
       "exportSuccess": "导出成功",
       "exportFailed": "导出失败",
       "importToPromptLibrarySuccess": "已转入提示词库",
-      "importToPromptLibraryFailed": "转入提示词库失败"
+      "importToPromptLibraryFailed": "转入提示词库失败",
+      "moveSuccess": "已移动 {count} 个资源",
+      "moveFailed": "移动资源失败",
+      "favoriteFailed": "收藏操作失败",
+      "createCategorySuccess": "分类已创建",
+      "renameCategorySuccess": "分类已重命名",
+      "moveCategorySuccess": "分类已移动",
+      "deleteCategorySuccess": "分类已删除",
+      "createCategoryFailed": "创建分类失败",
+      "renameCategoryFailed": "重命名分类失败",
+      "moveCategoryFailed": "移动分类失败",
+      "deleteCategoryFailed": "删除分类失败"
     },
     "noPromptDetected": "未解析到提示词",
     "noPromptDetectedDescription": "该资产未识别到正向/反向提示词。仍可导入预览图和生成参数（模型、采样器、步数等），提示词稍后可在提示词库中补充。",
