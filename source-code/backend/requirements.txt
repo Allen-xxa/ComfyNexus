@@ -67,3 +67,5 @@ pyyaml>=6.0
 
 # Version Parsing
 packaging>=21.0
+# 删除资产走回收站（缺失时会直接物理删除，务必保留）
+send2trash>=1.8.0
