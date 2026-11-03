@@ -3854,6 +3854,31 @@
     "createTime": "Create Time"
   },
   "asset": {
+    "filter": {
+      "types": {
+        "image": "Images",
+        "video": "Videos"
+      },
+      "withWorkflow": "Has Workflow",
+      "date": "Time",
+      "dateOptions": {
+        "all": "Any Time",
+        "today": "Today",
+        "week": "Last 7 Days",
+        "month": "Last 30 Days",
+        "quarter": "Last 90 Days"
+      },
+      "modelAll": "All Models",
+      "modelSelected": "Models {count}",
+      "modelSelectedCount": "{selected} of {total} models selected",
+      "modelSearchPlaceholder": "Search model name",
+      "modelClear": "Clear selection",
+      "modelEmpty": "No matching models",
+      "sortAsc": "Ascending",
+      "sortDesc": "Descending",
+      "clear": "Clear Filters",
+      "resultCount": "Showing {shown} of {total}"
+    },
     "searchPlaceholder": "Search assets, models or prompts...",
     "sort": "Sort",
     "import": "Import",
@@ -3870,24 +3895,24 @@
     },
     "ratingFilter": "Rating Filter",
     "sortOptions": {
-      "createdAt": "Newest First",
+      "createdAt": "Created Time",
       "name": "Name",
-      "size": "File Size"
+      "size": "File Size",
+      "rating": "Rating"
     },
     "rating": {
       "allRatings": "All Ratings",
       "unrated": "Unrated",
-      "1star": "1 Star",
-      "2stars": "2 Stars",
-      "3stars": "3 Stars",
-      "4stars": "4 Stars",
-      "5stars": "5 Stars"
+      "min1star": "1 star & up",
+      "min2stars": "2 stars & up",
+      "min3stars": "3 stars & up",
+      "min4stars": "4 stars & up",
+      "min5stars": "5 stars"
     },
     "importDialogTitle": "Select files to import",
     "batchManage": "Batch Manage",
     "exitBatch": "Exit Batch",
     "settings": "Settings",
-    "quickFilter": "Quick Filter",
     "settingsDialog": {
       "title": "Asset Library Settings",
       "description": "Configure the basic path and display options for the asset library",
@@ -3900,11 +3925,7 @@
       "saveSuccess": "Settings saved",
       "saveError": "Failed to save settings"
     },
-    "totalCount": "{count} assets total",
-    "selectedCount": "{count} selected",
     "thumbnailSizeValue": "{size}px",
-    "categoryTitle": "Categories",
-    "manageCategory": "Manage Categories",
     "noAssets": "No assets",
     "showFolders": "Nested View",
     "viewModes": {

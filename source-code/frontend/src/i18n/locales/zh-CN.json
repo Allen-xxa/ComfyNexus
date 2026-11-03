@@ -4422,11 +4422,30 @@
       "getScanStatusException": "获取扫描状态异常",
       "simulatingScan": "模拟扫描中..."
     },
-    "filterTag": {
-      "all": "全部",
-      "image": "图片",
-      "video": "视频",
-      "hasWorkflow": "含工作流"
+    "filter": {
+      "types": {
+        "image": "图片",
+        "video": "视频"
+      },
+      "withWorkflow": "含工作流",
+      "date": "时间",
+      "dateOptions": {
+        "all": "全部时间",
+        "today": "今天",
+        "week": "近 7 天",
+        "month": "近 30 天",
+        "quarter": "近 90 天"
+      },
+      "modelAll": "全部模型",
+      "modelSelected": "模型 {count}",
+      "modelSelectedCount": "已选 {selected} / {total} 个模型",
+      "modelSearchPlaceholder": "搜索模型名",
+      "modelClear": "清空选择",
+      "modelEmpty": "没有匹配的模型",
+      "sortAsc": "升序",
+      "sortDesc": "降序",
+      "clear": "清除筛选",
+      "resultCount": "显示 {shown} / 共 {total} 个"
     },
     "searchPlaceholder": "搜索资源、模型或提示词...",
     "sort": "排序",
@@ -4444,24 +4463,24 @@
     },
     "ratingFilter": "星级筛选",
     "sortOptions": {
-      "createdAt": "最新创建",
+      "createdAt": "创建时间",
       "name": "名称",
-      "size": "文件大小"
+      "size": "文件大小",
+      "rating": "星级"
     },
     "rating": {
       "allRatings": "全部星级",
       "unrated": "未评分",
-      "1star": "1 星",
-      "2stars": "2 星",
-      "3stars": "3 星",
-      "4stars": "4 星",
-      "5stars": "5 星"
+      "min1star": "1 星及以上",
+      "min2stars": "2 星及以上",
+      "min3stars": "3 星及以上",
+      "min4stars": "4 星及以上",
+      "min5stars": "5 星"
     },
     "importDialogTitle": "选择要导入的文件",
     "batchManage": "批量管理",
     "exitBatch": "退出批量",
     "settings": "设置",
-    "quickFilter": "快速筛选",
     "settingsDialog": {
       "title": "资产库设置",
       "description": "配置资产库的基本路径和显示选项",
@@ -4495,11 +4514,7 @@
       "nsfwAutoBlurDisabled": "NSFW 自动模糊已关闭",
       "nsfwAutoBlurToggleError": "设置 NSFW 自动模糊失败"
     },
-    "totalCount": "共 {count} 个资源",
-    "selectedCount": "已选 {count} 个",
     "thumbnailSizeValue": "{size}px",
-    "categoryTitle": "分类",
-    "manageCategory": "管理分类目录",
     "noAssets": "暂无资源",
     "showFolders": "分层浏览",
     "viewModes": {

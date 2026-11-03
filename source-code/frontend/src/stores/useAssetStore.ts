@@ -5,29 +5,37 @@
 import { create } from 'zustand'
 import i18n from '@/i18n'
 import { mockAssets, mockAssetCategories } from '@/mocks/asset'
-import type { Asset, AssetCategory, AssetFilterTag, GallerySettings } from '@/mocks/asset'
+import type { Asset, AssetCategory, GallerySettings } from '@/mocks/asset'
 import type { GalleryMovedAssetPath } from '@/types/bridge'
 
-const extractFilterTags = (assets: Asset[]): AssetFilterTag[] => {
-  const tagSet = new Set<string>()
-  assets.forEach(asset => {
-    asset.tags?.forEach(tag => {
-      if (tag && tag.trim()) {
-        tagSet.add(tag.trim())
-      }
-    })
-  })
-  const tags = Array.from(tagSet).sort()
-  return [
-    { id: 'all', name: i18n.t('asset.filterTag.all') },
-    { id: 'type:image', name: i18n.t('asset.filterTag.image') },
-    { id: 'type:video', name: i18n.t('asset.filterTag.video') },
-    { id: 'hasWorkflow', name: i18n.t('asset.filterTag.hasWorkflow') },
-    ...tags.map(tag => ({ id: tag, name: tag }))
-  ]
+export type SortBy = 'name' | 'createdAt' | 'size' | 'rating'
+
+export type SortDir = 'asc' | 'desc'
+
+/** 按创建时间倒推的预设区间，'all' 表示不限 */
+export type AssetDateFilter = 'all' | 'today' | 'week' | 'month' | 'quarter'
+
+const DATE_FILTER_DAYS: Record<Exclude<AssetDateFilter, 'all'>, number> = {
+  today: 1,
+  week: 7,
+  month: 30,
+  quarter: 90
 }
 
-export type SortBy = 'name' | 'createdAt' | 'size'
+/** 区间按自然日起算：从今天 00:00 往回推 N-1 天的零点，避免"今天"随当前时刻漂移 */
+const dateFilterThreshold = (filter: Exclude<AssetDateFilter, 'all'>): number => {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  return startOfToday.getTime() - (DATE_FILTER_DAYS[filter] - 1) * 86400000
+}
+
+/** 切换排序字段时的自然方向：名称正序，其余（时间/大小/星级）从大到小 */
+const DEFAULT_SORT_DIR: Record<SortBy, SortDir> = {
+  name: 'asc',
+  createdAt: 'desc',
+  size: 'desc',
+  rating: 'desc'
+}
 
 export type AssetViewMode = 'masonry' | 'grid'
 
@@ -70,18 +78,23 @@ export interface ScanProgress {
 interface AssetStore {
   assets: Asset[]
   categories: AssetCategory[]
-  filterTags: AssetFilterTag[]
   settings: GallerySettings | null
   selectedCategoryId: string
   selectedAssetIds: string[]
   searchQuery: string
-  activeFilterTag: string
+  /** 空数组表示不限类型 */
+  typeFilter: Asset['type'][]
+  onlyWithWorkflow: boolean
+  /** 空数组表示不限模型；取值直接用资产里的 model 原串，展示名由界面裁 */
+  modelFilter: string[]
+  dateFilter: AssetDateFilter
   ratingFilter: string
   isBatchMode: boolean
   isLoading: boolean
   isScanning: boolean
   error: string | null
   sortBy: SortBy
+  sortDir: SortDir
   scanProgress: ScanProgress | null
   isStoppingScan: boolean
   _pollingInterval: ReturnType<typeof setInterval> | null
@@ -100,7 +113,14 @@ interface AssetStore {
   pollScanProgress: () => void
   setSelectedCategoryId: (id: string) => void
   setSearchQuery: (query: string) => void
-  setActiveFilterTag: (tagId: string) => void
+  toggleTypeFilter: (type: Asset['type']) => void
+  setOnlyWithWorkflow: (value: boolean) => void
+  toggleModelFilter: (model: string) => void
+  setDateFilter: (value: AssetDateFilter) => void
+  setSortDir: (dir: SortDir) => void
+  clearAttributeFilters: () => void
+  hasAttributeFilter: () => boolean
+  getModelOptions: () => { model: string; count: number }[]
   setRatingFilter: (filter: string) => void
   toggleBatchMode: () => void
   setBatchMode: (mode: boolean) => void
@@ -126,7 +146,6 @@ interface AssetStore {
   setViewMode: (mode: AssetViewMode) => void
   getFilteredAssets: () => Asset[]
   getGalleryItems: () => AssetGalleryItem[]
-  getAssetCount: () => number
   getNsfwStatus: () => Promise<{ success: boolean; modelAvailable?: boolean; nsfwAutoClassify?: boolean; nsfwThreshold?: number; nsfwAutoBlur?: boolean; isScanning?: boolean; isPaused?: boolean }>
   setNsfwEnabled: (enabled: boolean) => Promise<boolean>
   setNsfwThreshold: (threshold: number) => Promise<boolean>
@@ -232,18 +251,21 @@ const applyMovedAssetPaths = (
 export const useAssetStore = create<AssetStore>((set, get) => ({
   assets: [],
   categories: [],
-  filterTags: [],
   settings: null,
   selectedCategoryId: 'all',
   selectedAssetIds: [],
   searchQuery: '',
-  activeFilterTag: 'all',
+  typeFilter: [],
+  onlyWithWorkflow: false,
+  modelFilter: [],
+  dateFilter: 'all',
   ratingFilter: 'all',
   isBatchMode: false,
   isLoading: false,
   isScanning: false,
   error: null,
   sortBy: 'createdAt',
+  sortDir: 'desc',
   scanProgress: null,
   isStoppingScan: false,
   _pollingInterval: null as NodeJS.Timeout | null,
@@ -266,7 +288,6 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         set({
           assets: mockAssets,
           categories: mockAssetCategories,
-          filterTags: extractFilterTags(mockAssets),
           settings: { libraryPath: '', lastScanTime: null, nsfwAutoClassify: false, nsfwThreshold: 0.6, nsfwAutoBlur: true },
           isLoading: false
         })
@@ -315,7 +336,6 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
             nsfwThreshold: result.settings?.nsfwThreshold ?? 0.6,
             nsfwAutoBlur: result.settings?.nsfwAutoBlur ?? true
           },
-          filterTags: extractFilterTags(assetsWithThumbnail),
           isLoading: false
         })
         console.log('[useAssetStore] 数据加载完成，资产数量:', result.assets?.length, '分类数量:', result.categories?.length)
@@ -574,7 +594,23 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
   setSearchQuery: (query) => set({ searchQuery: query }),
 
-  setActiveFilterTag: (tagId) => set({ activeFilterTag: tagId }),
+  toggleTypeFilter: (type) => set((state) => ({
+    typeFilter: state.typeFilter.includes(type)
+      ? state.typeFilter.filter((t) => t !== type)
+      : [...state.typeFilter, type]
+  })),
+
+  setOnlyWithWorkflow: (value) => set({ onlyWithWorkflow: value }),
+
+  toggleModelFilter: (model) => set((state) => ({
+    modelFilter: state.modelFilter.includes(model)
+      ? state.modelFilter.filter((m) => m !== model)
+      : [...state.modelFilter, model]
+  })),
+
+  setDateFilter: (value) => set({ dateFilter: value }),
+
+  setSortDir: (dir) => set({ sortDir: dir }),
 
   toggleBatchMode: () =>
     set((state) => ({
@@ -1075,7 +1111,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     }
   },
 
-  setSortBy: (sortBy) => set({ sortBy }),
+  setSortBy: (sortBy) => set({ sortBy, sortDir: DEFAULT_SORT_DIR[sortBy] }),
 
   setShowFoldersInList: (show) => {
     localStorage.setItem('asset-show-folders-in-list', String(show))
@@ -1091,6 +1127,35 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     set({ viewMode: mode })
   },
 
+  hasAttributeFilter: () => {
+    const state = get()
+    return (
+      state.typeFilter.length > 0 ||
+      state.onlyWithWorkflow ||
+      state.modelFilter.length > 0 ||
+      state.dateFilter !== 'all' ||
+      state.ratingFilter !== 'all'
+    )
+  },
+
+  clearAttributeFilters: () => set({
+    typeFilter: [],
+    onlyWithWorkflow: false,
+    modelFilter: [],
+    dateFilter: 'all',
+    ratingFilter: 'all'
+  }),
+
+  getModelOptions: () => {
+    const counts = new Map<string, number>()
+    for (const asset of get().assets) {
+      if (!asset.model) continue
+      counts.set(asset.model, (counts.get(asset.model) ?? 0) + 1)
+    }
+    return Array.from(counts, ([model, count]) => ({ model, count }))
+      .sort((a, b) => b.count - a.count || a.model.localeCompare(b.model))
+  },
+
   getFilteredAssets: () => {
     const state = get()
     let filtered = state.assets
@@ -1101,7 +1166,9 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         (a) =>
           a.filename.toLowerCase().includes(query) ||
           a.prompt?.toLowerCase().includes(query) ||
-          a.model?.toLowerCase().includes(query)
+          a.model?.toLowerCase().includes(query) ||
+          a.description?.toLowerCase().includes(query) ||
+          a.tags?.some((tag) => tag.toLowerCase().includes(query))
       )
     }
 
@@ -1118,33 +1185,43 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       }
     }
 
-    if (state.activeFilterTag !== 'all') {
-      const tag = state.activeFilterTag
-      if (tag === 'type:image') {
-        filtered = filtered.filter((a) => a.type === 'image')
-      } else if (tag === 'type:video') {
-        filtered = filtered.filter((a) => a.type === 'video')
-      } else if (tag === 'hasWorkflow') {
-        filtered = filtered.filter((a) => a.hasWorkflow)
-      } else {
-        filtered = filtered.filter((a) => a.tags?.includes(tag))
-      }
+    if (state.typeFilter.length > 0) {
+      filtered = filtered.filter((a) => state.typeFilter.includes(a.type))
+    }
+
+    if (state.onlyWithWorkflow) {
+      filtered = filtered.filter((a) => a.hasWorkflow)
+    }
+
+    if (state.modelFilter.length > 0) {
+      filtered = filtered.filter((a) => a.model && state.modelFilter.includes(a.model))
+    }
+
+    if (state.dateFilter !== 'all') {
+      const from = dateFilterThreshold(state.dateFilter)
+      filtered = filtered.filter((a) => new Date(a.createdAt).getTime() >= from)
     }
 
     if (state.ratingFilter !== 'all') {
-      const targetRating = parseInt(state.ratingFilter)
-      filtered = filtered.filter((a) => (a.rating || 0) === targetRating)
+      const target = parseInt(state.ratingFilter)
+      // 0 是"未评级"这一档，其余按"至少 N 星"理解：评过 5 星的当然也想在 3 星筛选里看到
+      filtered = target === 0
+        ? filtered.filter((a) => (a.rating || 0) === 0)
+        : filtered.filter((a) => (a.rating || 0) >= target)
     }
 
+    const direction = state.sortDir === 'asc' ? 1 : -1
     filtered = [...filtered].sort((a, b) => {
       switch (state.sortBy) {
         case 'name':
-          return a.filename.localeCompare(b.filename)
+          return direction * a.filename.localeCompare(b.filename)
         case 'size':
-          return b.size - a.size
+          return direction * (a.size - b.size)
+        case 'rating':
+          return direction * ((a.rating || 0) - (b.rating || 0))
         case 'createdAt':
         default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          return direction * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       }
     })
 
@@ -1167,9 +1244,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       return assets.map((asset) => ({ kind: 'asset', asset }))
     }
 
-    const canShowFolders =
-      state.activeFilterTag === 'all' &&
-      state.ratingFilter === 'all'
+    const canShowFolders = !state.hasAttributeFilter()
 
     const query = state.searchQuery.trim().toLowerCase()
     const folders = canShowFolders
@@ -1188,8 +1263,6 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     ]
   },
 
-  getAssetCount: () => get().assets.length,
-
   updateAssetInfo: async (assetId, data) => {
     try {
       if (isDevelopment()) {
@@ -1205,8 +1278,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           }
           const newAssets = assets.map(a => a.id === assetId ? updatedAsset : a)
           set({
-            assets: newAssets,
-            filterTags: extractFilterTags(newAssets)
+            assets: newAssets
           })
           return { success: true, asset: updatedAsset }
         }
@@ -1229,8 +1301,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         }
         const newAssets = assets.map(a => a.id === assetId ? updatedAsset : a)
         set({
-          assets: newAssets,
-          filterTags: extractFilterTags(newAssets)
+          assets: newAssets
         })
         return { success: true, asset: updatedAsset }
       }

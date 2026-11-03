@@ -45,11 +45,6 @@ export interface AssetCategory {
   children?: AssetCategory[]
 }
 
-export interface AssetFilterTag {
-  id: string
-  name: string
-}
-
 export interface GallerySettings {
   libraryPath: string
   lastScanTime: string | null
@@ -117,14 +112,6 @@ export const mockAssetCategories: AssetCategory[] = [
       }
     ]
   }
-]
-
-export const mockAssetFilterTags: AssetFilterTag[] = [
-  { id: 'all', name: '全部' },
-  { id: 'sdxl', name: 'SDXL' },
-  { id: 'portrait', name: '人物肖像' },
-  { id: 'anime', name: '二次元' },
-  { id: 'hasWorkflow', name: '包含工作流' }
 ]
 
 const generateMockAsset = (index: number): Asset => {

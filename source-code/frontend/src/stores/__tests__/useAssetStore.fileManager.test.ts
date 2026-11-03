@@ -42,18 +42,21 @@ describe('useAssetStore file manager mode', () => {
     useAssetStore.setState({
       assets,
       categories,
-      filterTags: [],
       settings: null,
       selectedCategoryId: 'all',
       selectedAssetIds: [],
       searchQuery: '',
-      activeFilterTag: 'all',
+      typeFilter: [],
+      onlyWithWorkflow: false,
+      modelFilter: [],
+      dateFilter: 'all',
       ratingFilter: 'all',
       isBatchMode: false,
       isLoading: false,
       isScanning: false,
       error: null,
       sortBy: 'name',
+      sortDir: 'asc',
       scanProgress: null,
       isStoppingScan: false,
       _pollingInterval: null,
@@ -105,7 +108,7 @@ describe('useAssetStore file manager mode', () => {
     useAssetStore.setState({
       selectedCategoryId: 'parent',
       showFoldersInList: true,
-      activeFilterTag: 'type:image'
+      typeFilter: ['image']
     })
 
     const items = useAssetStore.getState().getGalleryItems()

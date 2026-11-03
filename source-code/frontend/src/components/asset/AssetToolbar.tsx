@@ -1,13 +1,17 @@
 /**
  * 资产库顶部工具栏
+ *
+ * 这一行只负责"怎么看"（视图、尺寸、刷新、导入、批量）；"看哪些"交给下方的
+ * AssetFilterBar 二级筛选区，两者一起被筛选区的显隐开关控制。
  */
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, Upload, Download, CheckSquare, Settings, RefreshCw, Loader2, Eye, Star, ChevronDown, FolderTree, ArrowUpDown, Columns3, LayoutGrid } from 'lucide-react'
-import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider, Switch } from '@/components/ui'
+import { Search, Upload, Download, CheckSquare, Settings, RefreshCw, Loader2, Eye, ChevronDown, FolderTree, Columns3, LayoutGrid } from 'lucide-react'
+import { Button, Input, Label, Slider, Switch } from '@/components/ui'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { useAssetStore, type SortBy } from '@/stores/useAssetStore'
+import { useAssetStore } from '@/stores/useAssetStore'
+import { AssetFilterBar } from './AssetFilterBar'
 import { cn } from '@/lib/utils'
 
 interface AssetToolbarProps {
@@ -16,33 +20,13 @@ interface AssetToolbarProps {
   hideLayoutControls?: boolean
 }
 
-const RATING_FILTERS = [
-  { value: 'all', label: 'allRatings' },
-  { value: '0', label: 'unrated' },
-  { value: '1', label: '1star' },
-  { value: '2', label: '2stars' },
-  { value: '3', label: '3stars' },
-  { value: '4', label: '4stars' },
-  { value: '5', label: '5stars' }
-] as const
-
-const SORT_OPTIONS = [
-  { value: 'createdAt', label: 'createdAt' },
-  { value: 'name', label: 'name' },
-  { value: 'size', label: 'size' }
-] as const
-
 export function AssetToolbar({ onOpenSettings, hideLayoutControls }: AssetToolbarProps) {
   const { t } = useTranslation()
   const {
     searchQuery,
     setSearchQuery,
-    filterTags,
-    activeFilterTag,
-    setActiveFilterTag,
     isBatchMode,
     selectedAssetIds,
-    getAssetCount,
     toggleBatchMode,
     scanLibrary,
     incrementalScanLibrary,
@@ -51,10 +35,6 @@ export function AssetToolbar({ onOpenSettings, hideLayoutControls }: AssetToolba
     exportZip,
     thumbnailSize,
     setThumbnailSize,
-    ratingFilter,
-    setRatingFilter,
-    sortBy,
-    setSortBy,
     showFoldersInList,
     setShowFoldersInList,
     viewMode,
@@ -64,7 +44,6 @@ export function AssetToolbar({ onOpenSettings, hideLayoutControls }: AssetToolba
   const [isImporting, setIsImporting] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isRefreshMenuOpen, setIsRefreshMenuOpen] = useState(false)
-  const totalCount = getAssetCount()
 
   const handleIncrementalRefresh = async () => {
     setIsRefreshMenuOpen(false)
@@ -195,38 +174,6 @@ export function AssetToolbar({ onOpenSettings, hideLayoutControls }: AssetToolba
               </span>
             </div>
           )}
-          <Select
-            value={sortBy}
-            onValueChange={(value) => setSortBy(value as SortBy)}
-          >
-            <SelectTrigger className="h-8 w-auto gap-1 px-3">
-              <ArrowUpDown className="size-4" />
-              <SelectValue placeholder={t('asset.sort')} />
-            </SelectTrigger>
-            <SelectContent>
-              {SORT_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {t(`asset.sortOptions.${option.label}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={ratingFilter}
-            onValueChange={(value) => setRatingFilter(value)}
-          >
-            <SelectTrigger className="h-8 w-auto gap-1 px-3">
-              <Star className="size-4" />
-              <SelectValue placeholder={t('asset.ratingFilter')} />
-            </SelectTrigger>
-            <SelectContent>
-              {RATING_FILTERS.map((rating) => (
-                <SelectItem key={rating.value} value={rating.value}>
-                  {t(`asset.rating.${rating.label}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Popover open={isRefreshMenuOpen} onOpenChange={setIsRefreshMenuOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -307,41 +254,7 @@ export function AssetToolbar({ onOpenSettings, hideLayoutControls }: AssetToolba
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{t('asset.quickFilter')}:</span>
-          <div className="flex gap-2">
-            {filterTags.map((tag) => (
-              <Button
-                key={tag.id}
-                variant="ghost"
-                size="sm"
-                onClick={() => setActiveFilterTag(tag.id)}
-                className={cn(
-                  'h-auto rounded-full px-3 py-1 text-xs',
-                  activeFilterTag === tag.id
-                    ? 'bg-primary/15 text-primary hover:bg-primary/20'
-                    : 'bg-surface-active text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {tag.name}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <div className="text-xs text-muted-foreground">
-          {isBatchMode ? (
-            <span>
-              {t('asset.selectedCount', { count: selectedAssetIds.length })}
-            </span>
-          ) : (
-            <span>
-              {t('asset.totalCount', { count: totalCount })}
-            </span>
-          )}
-        </div>
-      </div>
+      <AssetFilterBar />
     </header>
   )
 }

@@ -3,6 +3,7 @@
  */
 
 export { AssetToolbar } from './AssetToolbar'
+export { AssetFilterBar } from './AssetFilterBar'
 export { AssetCategoryTree } from './AssetCategoryTree'
 export { AssetMasonryGrid } from './AssetMasonryGrid'
 export type { AssetMasonryGridRef } from './AssetMasonryGrid'
