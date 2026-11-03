@@ -45,6 +45,9 @@ class GalleryController:
             }
         """
         try:
+            # 历史视频资产缺少内嵌提示词，首次取列表时补一次（进程内幂等）
+            gallery_scanner.backfill_video_metadata()
+
             assets = gallery_storage.get_assets()
             categories = gallery_storage.get_categories()
             settings = gallery_storage.get_settings()
@@ -599,19 +602,12 @@ class GalleryController:
             return params
 
         try:
-            file_path = Path(asset.file_path)
-            if not file_path.exists() or file_path.suffix.lower() != ".png":
+            # 图片读 PNG 文本块，视频读 MP4 容器标签
+            workflow_data = gallery_scanner.read_embedded_workflow(Path(asset.file_path))
+            if not workflow_data:
                 return params
 
-            from PIL import Image
-            with Image.open(file_path) as img:
-                workflow_str = img.info.get("workflow")
-            if not workflow_str:
-                return params
-
-            _, _, extracted = gallery_scanner._extract_prompt_from_workflow(
-                json.loads(workflow_str)
-            )
+            _, _, extracted = gallery_scanner._extract_prompt_from_workflow(workflow_data)
             for key in missing:
                 value = (extracted or {}).get(key)
                 if value not in (None, ""):

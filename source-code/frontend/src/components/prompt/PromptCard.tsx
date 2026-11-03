@@ -15,12 +15,15 @@ interface PromptCardProps {
   isSelected: boolean
   isBatchMode: boolean
   selectedPromptIds: string[]
+  /** 右侧详情面板正在展示这一条 */
+  isActive?: boolean
   onSelect: (id: string) => void
+  onActivate?: (prompt: Prompt) => void
   onEdit: (prompt: Prompt) => void
   onCopy: (text: string, type: 'positive' | 'negative') => void
   onToggleFavorite: (id: string) => void
   onDelete: (id: string) => void
-  onHover: (prompt: Prompt | null) => void
+  onHover?: (prompt: Prompt | null) => void
 }
 
 export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function PromptCard(
@@ -29,7 +32,9 @@ export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function P
     isSelected,
     isBatchMode,
     selectedPromptIds,
+    isActive = false,
     onSelect,
+    onActivate,
     onEdit,
     onCopy,
     onToggleFavorite: _onToggleFavorite,
@@ -50,7 +55,7 @@ export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function P
 
   useEffect(() => {
     if (isGlobalDragging) {
-      onHover(null)
+      onHover?.(null)
     }
   }, [isGlobalDragging, onHover])
 
@@ -88,20 +93,23 @@ export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function P
   }, [prompt, _onDelete])
 
   const handleCardClick = useCallback(() => {
-    if (isBatchMode && !isDragTriggeredRef.current) {
+    if (isDragTriggeredRef.current) return
+    if (isBatchMode) {
       onSelect(prompt.id)
+      return
     }
-  }, [isBatchMode, onSelect, prompt.id])
+    onActivate?.(prompt)
+  }, [isBatchMode, onActivate, onSelect, prompt])
 
   const handleMouseEnter = useCallback(() => {
     if (!isBatchMode && !isGlobalDragging) {
-      onHover(prompt)
+      onHover?.(prompt)
     }
   }, [isBatchMode, isGlobalDragging, onHover, prompt])
 
   const handleMouseLeave = useCallback(() => {
     if (!isGlobalDragging) {
-      onHover(null)
+      onHover?.(null)
     }
   }, [isGlobalDragging, onHover])
 
@@ -192,7 +200,9 @@ export const PromptCard = forwardRef<HTMLDivElement, PromptCardProps>(function P
         'active:cursor-grabbing',
         isSelected
           ? 'border-success shadow-soft-md ring-1 ring-success'
-          : 'border-border-subtle hover:border-border',
+          : isActive
+            ? 'border-primary/50 ring-1 ring-primary/20'
+            : 'border-border-subtle hover:border-border',
         isVisualDragging && 'opacity-50 scale-[0.98] border-primary ring-2 ring-primary/30'
       )}
       onClick={handleCardClick}

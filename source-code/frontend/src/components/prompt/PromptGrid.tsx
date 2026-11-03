@@ -15,12 +15,14 @@ interface PromptGridProps {
   prompts: Prompt[]
   selectedPromptIds: string[]
   isBatchMode: boolean
+  activePromptId?: string | null
   onSelectPrompt: (id: string) => void
+  onActivatePrompt?: (prompt: Prompt) => void
   onEditPrompt: (prompt: Prompt) => void
   onCopyPrompt: (text: string, type: 'positive' | 'negative') => void
   onToggleFavorite: (id: string) => void
   onDeletePrompt: (id: string) => void
-  onHoverPrompt: (prompt: Prompt | null) => void
+  onHoverPrompt?: (prompt: Prompt | null) => void
 }
 
 export const PromptGrid = forwardRef<PromptGridRef, PromptGridProps>(function PromptGrid(
@@ -28,7 +30,9 @@ export const PromptGrid = forwardRef<PromptGridRef, PromptGridProps>(function Pr
     prompts,
     selectedPromptIds,
     isBatchMode,
+    activePromptId,
     onSelectPrompt,
+    onActivatePrompt,
     onEditPrompt,
     onCopyPrompt,
     onToggleFavorite,
@@ -73,7 +77,7 @@ export const PromptGrid = forwardRef<PromptGridRef, PromptGridProps>(function Pr
   }, [onDeletePrompt])
 
   const handleHover = useCallback((prompt: Prompt | null) => {
-    onHoverPrompt(prompt)
+    onHoverPrompt?.(prompt)
   }, [onHoverPrompt])
 
   if (prompts.length === 0) {
@@ -93,8 +97,10 @@ export const PromptGrid = forwardRef<PromptGridRef, PromptGridProps>(function Pr
           prompt={prompt}
           isSelected={selectedPromptIds.includes(prompt.id)}
           isBatchMode={isBatchMode}
+          isActive={activePromptId === prompt.id}
           selectedPromptIds={selectedPromptIds}
           onSelect={handleSelect}
+          onActivate={onActivatePrompt}
           onEdit={handleEdit}
           onCopy={handleCopy}
           onToggleFavorite={handleToggleFavorite}

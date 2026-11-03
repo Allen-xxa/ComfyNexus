@@ -2207,6 +2207,29 @@
       "noPreview": "No preview image",
       "workflowSource": "Source workflow"
     },
+    "detail": {
+      "emptyTitle": "No prompt selected",
+      "emptyHint": "Pick one from the list on the left, or create a new one",
+      "positive": "Positive Prompt",
+      "negative": "Negative Prompt",
+      "noPositive": "This entry has no positive prompt yet",
+      "noNegative": "No negative prompt",
+      "params": "Generation Parameters",
+      "noParams": "No parameters recorded",
+      "copy": "Copy",
+      "copyParams": "Copy params",
+      "copied": "Copied",
+      "workflow": "Source Workflow",
+      "noWorkflow": "No workflow file recorded",
+      "remark": "Notes",
+      "duration": "Duration",
+      "updatedAt": "Updated",
+      "edit": "Edit",
+      "delete": "Delete",
+      "favorite": "Favorite",
+      "viewList": "List view",
+      "viewGrid": "Grid view"
+    },
     "preview": {
       "positivePrompt": "Positive Prompt",
       "negativePrompt": "Negative Prompt"

@@ -27,6 +27,7 @@ class GalleryScanner:
     _scanning = False
     _stopping = False
     _scan_progress: Optional[ScanProgress] = None
+    _metadata_backfilled = False
 
     def __init__(self):
         self._cancelled = False
@@ -394,6 +395,77 @@ class GalleryScanner:
                 if ext in SUPPORTED_EXTENSIONS:
                     yield Path(root) / file
 
+    def read_embedded_workflow(self, file_path: Path) -> Optional[dict]:
+        """读取媒体文件内嵌的工作流 JSON
+
+        PNG 存在文本块里，MP4 存在容器标签里，对外统一成 dict。
+        """
+        import json
+
+        try:
+            file_path = Path(file_path)
+            if not file_path.exists():
+                return None
+
+            suffix = file_path.suffix.lower()
+            raw = None
+            if suffix == ".png":
+                from PIL import Image
+                with Image.open(file_path) as img:
+                    raw = img.info.get("workflow")
+            elif suffix == ".mp4":
+                from backend.src.utils.mp4_metadata import read_mp4_text_tags
+                raw = read_mp4_text_tags(file_path).get("workflow")
+
+            if not raw:
+                return None
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else None
+        except Exception as e:
+            logger.debug(f"[GalleryScanner] 读取内嵌工作流失败 {file_path}: {e}")
+            return None
+
+    def backfill_video_metadata(self, force: bool = False) -> int:
+        """补齐历史视频资产缺失的提示词与生成参数
+
+        早期版本只解析 PNG 的文本块，视频资产即便内嵌了完整 workflow 也是空的。
+        这里对「视频 + 没有工作流 + 没有提示词」的资产重读一次容器标签，
+        进程内只跑一次；读不到标签的视频下次启动才会再试一次。
+        """
+        if self._metadata_backfilled and not force:
+            return 0
+        self._metadata_backfilled = True
+
+        updated = 0
+        for asset in gallery_storage.get_assets():
+            if asset.asset_type != "video" or asset.has_workflow or asset.prompt:
+                continue
+            file_path = Path(asset.file_path)
+            if not file_path.exists():
+                continue
+
+            metadata = self._extract_video_metadata(file_path)
+            if not metadata.get("has_workflow") and not metadata.get("prompt"):
+                continue
+
+            gallery_storage.update_asset(
+                asset.id,
+                has_workflow=metadata.get("has_workflow", asset.has_workflow),
+                prompt=metadata.get("prompt", asset.prompt),
+                negative_prompt=metadata.get("negative_prompt", asset.negative_prompt),
+                model=metadata.get("model", asset.model),
+                sampler=metadata.get("sampler", asset.sampler),
+                scheduler=metadata.get("scheduler", asset.scheduler),
+                steps=metadata.get("steps", asset.steps),
+                cfg=metadata.get("cfg", asset.cfg),
+                seed=metadata.get("seed", asset.seed),
+            )
+            updated += 1
+
+        if updated:
+            logger.info(f"[GalleryScanner] 已补齐 {updated} 个视频资产的提示词与生成参数")
+        return updated
+
     def _needs_update(self, asset: Asset, file_path: Path) -> bool:
         """检查资产是否需要更新"""
         try:
@@ -633,52 +705,87 @@ class GalleryScanner:
         return None
 
     def _extract_metadata(self, file_path: Path, asset_type: str) -> dict:
-        """提取元数据"""
-        metadata = {}
+        """提取元数据
 
+        图片读 PNG 的文本块，视频读 MP4 容器的自定义标签——两者格式不同，
+        但内容是同一份 workflow / prompt，解析逻辑共用。
+        """
         if asset_type == "image" and file_path.suffix.lower() == ".png":
             try:
                 from PIL import Image
                 with Image.open(file_path) as img:
                     info = img.info
-
                     workflow = info.get("workflow")
                     prompt = info.get("prompt")
+            except Exception:
+                return {}
+            return self._apply_embedded_payload({}, workflow, prompt)
 
-                    if workflow:
-                        try:
-                            import json
-                            workflow_data = json.loads(workflow)
-                            metadata["has_workflow"] = True
-                            metadata["workflow"] = workflow_data
-                            
-                            positive_prompt, negative_prompt, params = self._extract_prompt_from_workflow(workflow_data)
-                            if positive_prompt:
-                                metadata["prompt"] = positive_prompt
-                            if negative_prompt:
-                                metadata["negative_prompt"] = negative_prompt
-                            if params:
-                                metadata.update(params)
-                        except Exception:
-                            pass
+        if asset_type == "video":
+            return self._extract_video_metadata(file_path)
 
-                    if not metadata.get("prompt") and prompt:
-                        try:
-                            import json
-                            prompt_data = json.loads(prompt)
-                            positive_prompt, negative_prompt, params = self._extract_prompt_from_comfy_format(prompt_data)
-                            if positive_prompt:
-                                metadata["prompt"] = positive_prompt
-                            if negative_prompt:
-                                metadata["negative_prompt"] = negative_prompt
-                            if params:
-                                metadata.update(params)
-                        except Exception:
-                            if not metadata.get("prompt"):
-                                metadata["prompt"] = prompt
+        return {}
 
-            except Exception as e:
+    def _extract_video_metadata(self, file_path: Path) -> dict:
+        """从视频容器读取内嵌的 workflow / prompt
+
+        ComfyUI 的 VHS_VideoCombine 等节点会把工作流写成 mp4 的自定义标签
+        （ffmpeg 的 ``-movflags use_metadata_tags``），和 PNG 文本块等价。
+        之前只处理 PNG，所以视频资产一律没有提示词。
+        """
+        if file_path.suffix.lower() != ".mp4":
+            return {}
+
+        try:
+            from backend.src.utils.mp4_metadata import read_mp4_text_tags
+            tags = read_mp4_text_tags(file_path)
+        except Exception as e:
+            logger.debug(f"[GalleryScanner] 读取视频元数据失败 {file_path}: {e}")
+            return {}
+
+        if not tags:
+            return {}
+
+        metadata = self._apply_embedded_payload(
+            {}, tags.get("workflow"), tags.get("prompt")
+        )
+        if metadata.get("prompt"):
+            logger.info(f"[GalleryScanner] 视频内嵌工作流解析成功: {file_path.name}")
+        return metadata
+
+    def _apply_embedded_payload(self, metadata: dict, workflow_raw, prompt_raw) -> dict:
+        """把内嵌的 workflow / prompt 文本解析成提示词与生成参数"""
+        if workflow_raw:
+            try:
+                import json
+                workflow_data = json.loads(workflow_raw)
+                metadata["has_workflow"] = True
+                metadata["workflow"] = workflow_data
+
+                positive_prompt, negative_prompt, params = self._extract_prompt_from_workflow(workflow_data)
+                if positive_prompt:
+                    metadata["prompt"] = positive_prompt
+                if negative_prompt:
+                    metadata["negative_prompt"] = negative_prompt
+                if params:
+                    metadata.update(params)
+            except Exception:
                 pass
+
+        if not metadata.get("prompt") and prompt_raw:
+            try:
+                import json
+                prompt_data = json.loads(prompt_raw)
+                positive_prompt, negative_prompt, params = self._extract_prompt_from_comfy_format(prompt_data)
+                if positive_prompt:
+                    metadata["prompt"] = positive_prompt
+                if negative_prompt:
+                    metadata["negative_prompt"] = negative_prompt
+                if params:
+                    metadata.update(params)
+            except Exception:
+                if not metadata.get("prompt"):
+                    metadata["prompt"] = prompt_raw
 
         return metadata
 

@@ -2308,6 +2308,29 @@
       "noPreview": "暂无预览图",
       "workflowSource": "来源工作流"
     },
+    "detail": {
+      "emptyTitle": "未选择提示词",
+      "emptyHint": "从左侧列表选择一条，或直接新建",
+      "positive": "正向提示词",
+      "negative": "反向提示词",
+      "noPositive": "这条记录还没有正向提示词",
+      "noNegative": "未设置反向提示词",
+      "params": "生成参数",
+      "noParams": "暂未记录生成参数",
+      "copy": "复制",
+      "copyParams": "复制参数",
+      "copied": "已复制",
+      "workflow": "来源工作流",
+      "noWorkflow": "未记录工作流文件",
+      "remark": "备注",
+      "duration": "时长",
+      "updatedAt": "更新于",
+      "edit": "编辑",
+      "delete": "删除",
+      "favorite": "收藏",
+      "viewList": "列表视图",
+      "viewGrid": "网格视图"
+    },
     "preview": {
       "positivePrompt": "正向提示词",
       "negativePrompt": "反向提示词"
