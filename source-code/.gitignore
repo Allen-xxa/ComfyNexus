@@ -22,9 +22,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-# WebView2 netcore interop DLLs (needed for .NET 8 compat on Win10)
-!backend/lib/webview2_netcore/
+# 必须加锚点：未锚定的 lib/ 会连带吞掉 source-code/frontend/src/lib/ 这类源码目录，
+# 新放进去的文件不报错、也不出现在 git status 里（同 27b7183 修过的 env/ 事故）。
+/lib/
 lib64/
 parts/
 sdist/

@@ -14,7 +14,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# 必须加锚点：未锚定的 lib/ 会吞掉任意层级的 lib 目录，
+# 包括 source-code/frontend/src/lib/ 这类真实源码目录（同 env/ 那次事故）。
+/lib/
 lib64/
 parts/
 sdist/
@@ -31,6 +33,8 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+# 例外：打包配置是源码而非产物。缺了它，新 clone 的仓库无法复现正式包。
+!source-code/ComfyNexus.spec
 
 # Installer logs
 pip-log.txt
