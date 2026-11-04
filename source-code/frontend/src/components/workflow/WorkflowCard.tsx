@@ -2,13 +2,13 @@
  * 工作流卡片组件 - 左右分栏布局
  */
 
-import { useState, useCallback, useRef, useEffect, forwardRef } from 'react'
+import { useCallback, forwardRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download, Trash2, Network, Send, Star, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { PreviewCarousel } from './PreviewCarousel'
-import { useDragContext } from './WorkflowDragContext'
+import { useWorkflowDrag } from './useWorkflowDrag'
 import type { Workflow } from '@/types/workflow'
 
 interface WorkflowCardProps {
@@ -24,6 +24,15 @@ interface WorkflowCardProps {
   onToggleFavorite?: (workflow: Workflow) => void
   onPreviewChange?: () => void
   className?: string
+}
+
+function formatDate(dateString: string) {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('zh-CN', {
+    year: '2-digit',
+    month: '2-digit',
+    day: '2-digit'
+  }).replace(/\//g, '-')
 }
 
 export const WorkflowCard = forwardRef<HTMLDivElement, WorkflowCardProps>(function WorkflowCard(
@@ -44,108 +53,19 @@ export const WorkflowCard = forwardRef<HTMLDivElement, WorkflowCardProps>(functi
   ref
 ) {
   const { t } = useTranslation()
-  const [isLocalDragging, setIsLocalDragging] = useState(false)
-  
-  const { isDragging: isGlobalDragging, startDrag, updatePosition, endDrag, setDropTargetId } = useDragContext()
-  
-  const mouseDownPosRef = useRef({ x: 0, y: 0 })
-  const isDragTriggeredRef = useRef(false)
-  const isMouseDownRef = useRef(false)
 
-  useEffect(() => {
-    if (isGlobalDragging && isLocalDragging) {
-      document.body.style.cursor = 'grabbing'
-      document.body.style.userSelect = 'none'
-    } else {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-    
-    return () => {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isGlobalDragging, isLocalDragging])
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('zh-CN', {
-      year: '2-digit',
-      month: '2-digit',
-      day: '2-digit'
-    }).replace(/\//g, '-')
-  }
+  const { isVisualDragging, handleMouseDown, wasDragTriggered } = useWorkflowDrag({
+    workflowId: workflow.id,
+    selectedWorkflowIds,
+    isBatchMode,
+    isSelected
+  })
 
   const handleCardClick = useCallback(() => {
-    if (isBatchMode && !isDragTriggeredRef.current && onSelect) {
+    if (isBatchMode && !wasDragTriggered() && onSelect) {
       onSelect(workflow.id)
     }
-  }, [isBatchMode, onSelect, workflow.id])
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return
-    if ((e.target as HTMLElement).closest('button')) return
-    if (isBatchMode && !isSelected) return
-    
-    e.preventDefault()
-    
-    mouseDownPosRef.current = { x: e.clientX, y: e.clientY }
-    isDragTriggeredRef.current = false
-    isMouseDownRef.current = true
-    
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!isMouseDownRef.current) return
-      
-      const dx = moveEvent.clientX - mouseDownPosRef.current.x
-      const dy = moveEvent.clientY - mouseDownPosRef.current.y
-      const distance = Math.sqrt(dx * dx + dy * dy)
-      
-      if (distance > 5 && !isDragTriggeredRef.current) {
-        isDragTriggeredRef.current = true
-        setIsLocalDragging(true)
-        startDrag(workflow.id, selectedWorkflowIds, moveEvent.clientX, moveEvent.clientY)
-      }
-      
-      if (isDragTriggeredRef.current) {
-        updatePosition(moveEvent.clientX, moveEvent.clientY)
-        
-        const target = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)
-        const folderItem = target?.closest('[data-folder-id]')
-        if (folderItem) {
-          const folderId = folderItem.getAttribute('data-folder-id')
-          const isVirtual = folderItem.getAttribute('data-is-virtual') === 'true'
-          
-          if (folderId && (!isVirtual || folderId === 'favorites')) {
-            setDropTargetId(folderId)
-          } else {
-            setDropTargetId(null)
-          }
-        } else {
-          setDropTargetId(null)
-        }
-      }
-    }
-    
-    const handleMouseUp = () => {
-      isMouseDownRef.current = false
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      
-      if (isDragTriggeredRef.current) {
-        setIsLocalDragging(false)
-        endDrag()
-      }
-      
-      setTimeout(() => {
-        isDragTriggeredRef.current = false
-      }, 0)
-    }
-    
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [workflow.id, selectedWorkflowIds, startDrag, updatePosition, endDrag, setDropTargetId, isBatchMode, isSelected])
-
-  const isVisualDragging = isLocalDragging && isGlobalDragging
+  }, [isBatchMode, onSelect, workflow.id, wasDragTriggered])
 
   return (
     <div
@@ -171,7 +91,7 @@ export const WorkflowCard = forwardRef<HTMLDivElement, WorkflowCardProps>(functi
         >
           {workflow.name}
         </h3>
-        <div className="flex flex-shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {isBatchMode && (
             <div
               className={cn(
@@ -189,10 +109,10 @@ export const WorkflowCard = forwardRef<HTMLDivElement, WorkflowCardProps>(functi
               variant="ghost"
               size="icon"
               onClick={() => onExport(workflow)}
-              className="h-6 w-6 rounded p-1 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-primary"
+              className="size-6 rounded p-1 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-primary"
               title={t('workflow.card.export')}
             >
-              <Download className="h-3.5 w-3.5" />
+              <Download className="size-3.5" />
             </Button>
           )}
           {!isBatchMode && onDelete && (
@@ -200,17 +120,17 @@ export const WorkflowCard = forwardRef<HTMLDivElement, WorkflowCardProps>(functi
               variant="ghost"
               size="icon"
               onClick={() => onDelete(workflow)}
-              className="h-6 w-6 rounded p-1 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+              className="size-6 rounded p-1 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
               title={t('common.delete')}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="size-3.5" />
             </Button>
           )}
         </div>
       </div>
 
       <div className="flex flex-1 flex-row">
-        <div className="h-[150px] w-[150px] flex-shrink-0 border-r border-border-subtle">
+        <div className="size-[150px] shrink-0 border-r border-border-subtle">
           <PreviewCarousel
             preview={workflow.preview}
             previews={workflow.previews}
@@ -242,9 +162,9 @@ export const WorkflowCard = forwardRef<HTMLDivElement, WorkflowCardProps>(functi
           </div>
 
           <div className="mt-auto border-t border-border-subtle/50 pt-3">
-            <div className="mb-2 flex items-center justify-between text-xs font-mono text-muted-foreground">
+            <div className="mb-2 flex items-center justify-between font-mono text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <Network className="h-3 w-3" />
+                <Network className="size-3" />
                 {t('workflow.card.nodeCount', { count: workflow.nodes })}
               </span>
               <span className="flex items-center gap-1">
@@ -260,7 +180,7 @@ export const WorkflowCard = forwardRef<HTMLDivElement, WorkflowCardProps>(functi
                   className="flex-1 gap-1 border border-border-subtle bg-surface-hover text-xs text-foreground hover:bg-surface-active"
                   onClick={() => onAnalyze(workflow)}
                 >
-                  <Network className="h-3 w-3" />
+                  <Network className="size-3" />
                   {t('workflow.card.analyze')}
                 </Button>
               )}
@@ -270,7 +190,7 @@ export const WorkflowCard = forwardRef<HTMLDivElement, WorkflowCardProps>(functi
                   className="flex-1 gap-1 bg-primary text-xs text-primary-foreground hover:bg-primary-hover"
                   onClick={() => onLoad(workflow)}
                 >
-                  <Send className="h-3 w-3" />
+                  <Send className="size-3" />
                   {t('workflow.card.load')}
                 </Button>
               )}

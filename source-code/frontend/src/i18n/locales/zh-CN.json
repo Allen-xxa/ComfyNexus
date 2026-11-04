@@ -2139,10 +2139,14 @@
       "favorite": "收藏"
     },
     "detail": {
-      "reportTitle": "工作流分析报告",
       "noDescription": "暂无描述",
-      "defaultTag": "默认标签",
-      "load": "加载"
+      "selectHint": "选中一个工作流，这里显示它的预览、信息、节点图和插件清单",
+      "graph": "节点图",
+      "noRawData": "无法读取该工作流的原始数据"
+    },
+    "viewModes": {
+      "list": "紧凑列表",
+      "card": "卡片网格"
     },
     "sidebar": {
       "title": "目录导航",

@@ -2037,10 +2037,14 @@
       "favorite": "Favorite"
     },
     "detail": {
-      "reportTitle": "Workflow Analysis Report",
       "noDescription": "No description",
-      "defaultTag": "Default",
-      "load": "Load"
+      "selectHint": "Select a workflow to see its preview, info, node graph and plugin list here",
+      "graph": "Node Graph",
+      "noRawData": "Cannot read the raw data of this workflow"
+    },
+    "viewModes": {
+      "list": "Compact List",
+      "card": "Card Grid"
     },
     "sidebar": {
       "title": "Navigation",

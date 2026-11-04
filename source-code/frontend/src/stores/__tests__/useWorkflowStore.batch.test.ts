@@ -252,4 +252,22 @@ describe('useWorkflowStore - 批量操作', () => {
       expect(result!).toBe(false)
     })
   })
+
+  describe('viewMode', () => {
+    it('切换视图偏好会同时更新状态和 localStorage', () => {
+      act(() => {
+        useWorkflowStore.getState().setViewMode('card')
+      })
+
+      expect(useWorkflowStore.getState().viewMode).toBe('card')
+      expect(localStorage.setItem).toHaveBeenCalledWith('workflow-view-mode', 'card')
+
+      act(() => {
+        useWorkflowStore.getState().setViewMode('list')
+      })
+
+      expect(useWorkflowStore.getState().viewMode).toBe('list')
+      expect(localStorage.setItem).toHaveBeenCalledWith('workflow-view-mode', 'list')
+    })
+  })
 })

@@ -12,6 +12,9 @@ export interface WorkflowFilterTag {
   name: string
 }
 
+/** 与资产库 viewMode 同一套玩法：视图偏好写 localStorage，默认紧凑列表 */
+export type WorkflowViewMode = 'list' | 'card'
+
 const extractFilterTags = (workflows: Workflow[]): WorkflowFilterTag[] => {
   const tagSet = new Set<string>()
   workflows.forEach(workflow => {
@@ -40,6 +43,7 @@ interface WorkflowStore {
   isBatchMode: boolean
   filterTags: WorkflowFilterTag[]
   activeFilterTag: string
+  viewMode: WorkflowViewMode
 
   setWorkflows: (workflows: Workflow[]) => void
   setSelectedWorkflow: (workflow: Workflow | null) => void
@@ -58,6 +62,7 @@ interface WorkflowStore {
   reloadAfterFolderChange: () => Promise<void>
   moveWorkflowToFolder: (workflowId: string, folderId: string | null) => Promise<void>
   setActiveFilterTag: (tagId: string) => void
+  setViewMode: (mode: WorkflowViewMode) => void
 
   setBatchMode: (mode: boolean) => void
   toggleWorkflowSelection: (id: string) => void
@@ -82,6 +87,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   isBatchMode: false,
   filterTags: [],
   activeFilterTag: 'all',
+  viewMode: localStorage.getItem('workflow-view-mode') === 'card' ? 'card' : 'list',
 
   setWorkflows: (workflows) => set({ workflows, filterTags: extractFilterTags(workflows) }),
 
@@ -219,6 +225,11 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   },
 
   setActiveFilterTag: (tagId) => set({ activeFilterTag: tagId }),
+
+  setViewMode: (mode) => {
+    localStorage.setItem('workflow-view-mode', mode)
+    set({ viewMode: mode })
+  },
 
   setBatchMode: (mode) => set({ isBatchMode: mode, selectedWorkflowIds: mode ? get().selectedWorkflowIds : [] }),
 

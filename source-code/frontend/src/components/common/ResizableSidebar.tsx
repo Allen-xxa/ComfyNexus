@@ -1,13 +1,19 @@
 /**
  * 可拖拽宽度的侧边栏外壳
  *
- * 分类树/文件夹树统一使用：右缘拖拽调宽、双击复位、折叠成窄条。
+ * 分类树/文件夹树统一使用：边缘拖拽调宽、双击复位、折叠成窄条。
  * 宽度和折叠状态写入 localStorage，刷新后保持。
+ * side 决定把手与折叠按钮在哪一侧：左栏（默认）把手在右缘，右栏把手在左缘。
  */
 
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import {
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen
+} from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 
@@ -22,6 +28,8 @@ interface ResizableSidebarProps {
   minWidth?: number
   maxWidth?: number
   className?: string
+  /** 面板相对内容区的位置，决定拖拽把手和折叠按钮在哪一缘 */
+  side?: 'left' | 'right'
 }
 
 function clampWidth(value: number, min: number, max: number): number {
@@ -40,9 +48,11 @@ export function ResizableSidebar({
   defaultWidth = 224,
   minWidth = 180,
   maxWidth = 440,
-  className
+  className,
+  side = 'left'
 }: ResizableSidebarProps) {
   const { t } = useTranslation()
+  const isRight = side === 'right'
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSED_KEY_PREFIX + storageKey) === 'true'
@@ -73,10 +83,15 @@ export function ResizableSidebar({
 
       dragRef.current = { startX: event.clientX, startWidth: width }
 
+      const startX = event.clientX
+      // 右栏向左拖才是变宽，delta 要按把手所在缘镜像
+      const signedDelta = (clientX: number) =>
+        isRight ? startX - clientX : clientX - startX
+
       const handleMove = (moveEvent: PointerEvent) => {
         const drag = dragRef.current
         if (!drag) return
-        setWidth(clampWidth(drag.startWidth + moveEvent.clientX - drag.startX, minWidth, maxWidth))
+        setWidth(clampWidth(drag.startWidth + signedDelta(moveEvent.clientX), minWidth, maxWidth))
       }
 
       const handleUp = (upEvent: PointerEvent) => {
@@ -85,21 +100,23 @@ export function ResizableSidebar({
         const drag = dragRef.current
         dragRef.current = null
         if (drag) {
-          persistWidth(drag.startWidth + upEvent.clientX - drag.startX)
+          persistWidth(drag.startWidth + signedDelta(upEvent.clientX))
         }
       }
 
       window.addEventListener('pointermove', handleMove)
       window.addEventListener('pointerup', handleUp)
     },
-    [maxWidth, minWidth, persistWidth, width]
+    [isRight, maxWidth, minWidth, persistWidth, width]
   )
 
   if (collapsed) {
+    const ExpandIcon = isRight ? PanelRightOpen : PanelLeftOpen
     return (
       <aside
         className={cn(
-          'flex w-10 shrink-0 flex-col items-center border-r border-border-subtle bg-surface py-2',
+          'flex w-10 shrink-0 flex-col items-center bg-surface py-2',
+          isRight ? 'border-l border-border-subtle' : 'border-r border-border-subtle',
           className
         )}
       >
@@ -110,16 +127,19 @@ export function ResizableSidebar({
           title={t('common.sidebar.expand')}
           className="size-7 text-muted-foreground hover:text-foreground"
         >
-          <PanelLeftOpen className="size-4" />
+          <ExpandIcon className="size-4" />
         </Button>
       </aside>
     )
   }
 
+  const CollapseIcon = isRight ? PanelRightClose : PanelLeftClose
+
   return (
     <aside
       className={cn(
-        'group/sidebar relative flex shrink-0 flex-col border-r border-border-subtle bg-surface',
+        'group/sidebar relative flex shrink-0 flex-col bg-surface',
+        isRight ? 'border-l border-border-subtle' : 'border-r border-border-subtle',
         className
       )}
       style={{ width }}
@@ -133,8 +153,10 @@ export function ResizableSidebar({
         onDoubleClick={() => persistWidth(defaultWidth)}
         title={t('common.sidebar.resetHint')}
         className={cn(
-          'absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize',
-          'after:absolute after:right-0.5 after:top-0 after:h-full after:w-px after:bg-transparent',
+          'absolute top-0 z-10 h-full w-2 cursor-col-resize',
+          isRight
+            ? '-left-1 after:absolute after:left-0.5 after:top-0 after:h-full after:w-px after:bg-transparent'
+            : '-right-1 after:absolute after:right-0.5 after:top-0 after:h-full after:w-px after:bg-transparent',
           'hover:after:bg-primary/40 active:after:bg-primary'
         )}
       />
@@ -145,13 +167,14 @@ export function ResizableSidebar({
         onClick={toggleCollapsed}
         title={t('common.sidebar.collapse')}
         className={cn(
-          'absolute -right-3 top-1/2 z-20 size-6 -translate-y-1/2 rounded-full',
+          'absolute top-1/2 z-20 size-6 -translate-y-1/2 rounded-full',
           'border border-border-subtle bg-surface text-muted-foreground shadow-sm',
           'opacity-0 transition-opacity hover:text-foreground',
-          'group-hover/sidebar:opacity-100 focus-visible:opacity-100'
+          'group-hover/sidebar:opacity-100 focus-visible:opacity-100',
+          isRight ? '-left-3' : '-right-3'
         )}
       >
-        <PanelLeftClose className="size-3.5" />
+        <CollapseIcon className="size-3.5" />
       </Button>
     </aside>
   )

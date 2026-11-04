@@ -4,8 +4,9 @@
 
 export { WorkflowNode } from './WorkflowNode'
 export { WorkflowGraph } from './WorkflowGraph'
-export { WorkflowDetailDialog } from './WorkflowDetailDialog'
 export { WorkflowCard } from './WorkflowCard'
+export { WorkflowListView, type WorkflowListRef } from './WorkflowListView'
+export { WorkflowDetailPanel } from './WorkflowDetailPanel'
 export { WorkflowSidebar } from './WorkflowSidebar'
 export { PreviewCarousel } from './PreviewCarousel'
 export { WorkflowStats } from './WorkflowStats'
