@@ -1,0 +1,97 @@
+// ComfyNexus 架构风险网络（Phase 1 范围） · 2026-11-01 · fix/security-hardening@88bdb15
+// 配套 risk-register.md；节点 ID 与登记编号一一对应。
+// 边语义：risk -[amplified-by/leads-to]-> surface/component，surface -[enables]-> impact。
+// 实线 = high 置信且有直接证据；虚线 = medium 置信或缺少直接确认。
+digraph cn_risk_map {
+  rankdir=TB;
+  nodesep=0.45;
+  ranksep=0.85;
+  fontname="Microsoft YaHei";
+  labelloc=t;
+  label="ComfyNexus 风险网络  红=严重/高  橙=中或修复在途  绿=基线已提交缓解  灰=组件/待处置\n(证据与验收见 risk-register.md · 结论锚定 88bdb15，勿与工作区混淆)";
+  node [fontname="Microsoft YaHei", fontsize=10, style="rounded,filled"];
+  edge [fontname="Microsoft YaHei", fontsize=8];
+
+  // ===== 攻击面 / 组件 =====
+  subgraph cluster_surfaces {
+    label="组件与攻击面";
+    style="dashed";
+    color="#888888";
+    mediaSrv [label="mediaSrv\n回环 Flask 服务\n127.0.0.1:{5000+}\nhttp_server.py:300", fillcolor="#1e88e5", fontcolor="white"];
+    bridgeApi [label="bridgeApi\npywebview 桥 389 方法\napi.py:7705 行", fillcolor="#7c3aed", fontcolor="white"];
+    updater  [label="updater\n独立更新器进程\nupdater.py:599-680", fillcolor="#2563eb", fontcolor="white"];
+    filesys  [label="本机文件系统\nconfig/*.json · ai_assistant.db\nsecrets/ai_fernet.key", fillcolor="#2f855a", fontcolor="white"];
+    appdir   [label="应用安装目录\n(绿色免安装)", fillcolor="#2f855a", fontcolor="white"];
+    venv     [label="开发 venv\nsite-packages/webview", fillcolor="#a0aec0", fontcolor="black"];
+    repo     [label="git 仓库状态\n.pyc/产物被跟踪 · 工作区脏", fillcolor="#a0aec0", fontcolor="black"];
+    gate     [label="质量门禁\n无 CI · lint.yml 位置失效", fillcolor="#a0aec0", fontcolor="black"];
+  }
+
+  // ===== 风险 =====
+  R01 [label="R-01 静态路由任意文件读\n严重 · 实测可利用", fillcolor="#d33", fontcolor="white"];
+  R02 [label="R-02 CORS 反射任意来源\n高 · 实测", fillcolor="#d33", fontcolor="white"];
+  R03 [label="R-03 回环无鉴权+端口可预测\n中", fillcolor="#e8930c", fontcolor="black"];
+  R04 [label="R-04 更新器解压无穿越防护\n严重 · 更新器内 0 处校验", fillcolor="#d33", fontcolor="white"];
+  R05 [label="R-05 hash 校验 fail-open\n中 · 降级路径", fillcolor="#e8930c", fontcolor="black"];
+  R06 [label="R-06 更新源指向上游仓库\n中 · 决策项", fillcolor="#e8930c", fontcolor="black"];
+  R07 [label="R-07 MinGit 无校验+无防护\n中 · 来源固定", fillcolor="#e8930c", fontcolor="black"];
+  R08 [label="R-08 桥无路径白名单\n中 · 需前端注入为前提", fillcolor="#e8930c", fontcolor="black"];
+  R09 [label="R-09 无 CI 质量门禁\n高", fillcolor="#d33", fontcolor="white"];
+  R10 [label="R-10 产物与运行时数据入库\n中", fillcolor="#e8930c", fontcolor="black"];
+  R11 [label="R-11 构建改写 venv\n中 · 建议 Phase 2", fillcolor="#e8930c", fontcolor="black"];
+  R12 [label="R-12 基线硬编码 Fernet 密钥\n严重 · 修复在途未提交", fillcolor="#d33", fontcolor="white"];
+
+  // ===== 影响 =====
+  Iread [label="影响：本机任意文件被读\n(信息泄露，非 RCE)", fillcolor="#fff", color="#d33", fontcolor="black"];
+  Iexec [label="影响：应用目录外任意写\n→ 本机代码执行前置", fillcolor="#fff", color="#d33", fontcolor="black"];
+  Ilost [label="影响：fork 本地改动被上游包覆盖", fillcolor="#fff", color="#e8930c", fontcolor="black"];
+  Iregress [label="影响：修复无机制守住\n回归只能靠人工发现", fillcolor="#fff", color="#d33", fontcolor="black"];
+  Inoise [label="影响：diff 噪声掩盖真实改动\n「工作区干净」前置失效", fillcolor="#fff", color="#e8930c", fontcolor="black"];
+  Ikey [label="影响：全部用户 api_key 密文\n可被任意持有源码者解密", fillcolor="#fff", color="#d33", fontcolor="black"];
+
+  // ===== 缓解（区分已提交与在途） =====
+  M1 [label="在途未提交：按机器 Fernet 密钥\n+icacls ACL+迁移\nsecret_store.py 不在 HEAD", fillcolor="#e8930c", fontcolor="black"];
+  M2 [label="已缓解：autoUpdate=false\nsettings_manager.py:47", fillcolor="#38a169", fontcolor="white"];
+  M3 [label="已缓解：version.json 实际带 hash\n:6 · workflow 由 release 生成", fillcolor="#38a169", fontcolor="white"];
+
+  // ===== 边：风险落点 =====
+  R01 -> mediaSrv [label="位于"];
+  R02 -> mediaSrv [label="位于"];
+  R03 -> mediaSrv [label="降低利用成本"];
+  R04 -> updater [label="位于"];
+  R05 -> updater [color="#888888", style=dashed, label="上游下载器"];
+  R06 -> updater [style=dashed, label="内容来源"];
+  R07 -> updater [style=dashed, label="同一解压模式"];
+  R08 -> bridgeApi [label="位于"];
+  R09 -> gate [label="位于"];
+  R10 -> repo [label="位于"];
+  R11 -> venv [label="改写"];
+  R12 -> filesys [label="密文写入 ai_assistant.db"];
+
+  // ===== 边：组合放大 =====
+  R02 -> R01 [label="把本机面变远程可达", color="#d33", penwidth=2];
+  R03 -> R01 [label="端口枚举"];
+  R05 -> R04 [label="完整性缺口接任意写", color="#d33", penwidth=2];
+  R06 -> R05 [label="可省略 hash 的来源"];
+  R10 -> R11 [label="跟踪的 dist 被构建删除"];
+
+  // ===== 边：通向影响 =====
+  mediaSrv -> filesys [label="send_file 裸拼接", color="#d33"];
+  filesys -> Iread [color="#d33", penwidth=2];
+  updater -> appdir [label="解压写入", color="#d33"];
+  appdir -> Iexec [color="#d33", penwidth=2];
+  updater -> Ilost [style=dashed];
+  gate -> Iregress [color="#d33", penwidth=2];
+  repo -> Inoise;
+  bridgeApi -> filesys [label="需先注入前端", style=dashed, color="#888888"];
+  R12 -> Ikey [color="#d33", penwidth=2];
+
+  // ===== 缓解关系（绿=基线已提交，橙=在途未提交） =====
+  M1 -> R12 [label="修复存在但未进基线", style=dashed, color="#e8930c", penwidth=2];
+  M2 -> Ilost [label="默认路径已关", style=dashed, color="#38a169"];
+  M3 -> R05 [label="常态已校验", style=dashed, color="#38a169"];
+
+  // ===== 分层 =====
+  { rank=source; R01 R02 R04 R09 R12; }
+  { rank=sink; Iread Iexec Iregress Ilost Inoise Ikey; }
+}
