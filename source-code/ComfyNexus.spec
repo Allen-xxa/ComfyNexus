@@ -13,7 +13,9 @@
 import os
 from PyInstaller.utils.hooks import collect_all
 
-ROOT = r'E:\project\ComfyNexus\source-code'
+# SPECPATH 由 PyInstaller 注入，指向本 spec 所在目录（即 source-code），
+# 因此换机器、换盘符、换 clone 位置都能直接打包，与 updater.spec 的取法保持一致。
+ROOT = os.path.abspath(SPECPATH)
 BACKEND = os.path.join(ROOT, 'backend')
 
 pythonnet_datas, pythonnet_bins, pythonnet_hiddenimports = collect_all('pythonnet')
