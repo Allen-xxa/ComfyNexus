@@ -45,6 +45,9 @@ class Api:
         self._dpi_scale = 1.0
         self._frontend_heartbeat_received = False
         self._app_exit_requested = False
+        # 关闭确认弹窗待处理标志：ALT+F4 等系统关闭请求被拦截并触发弹窗后置位，
+        # 置位期间忽略新的关闭请求；弹窗关闭时由前端调用 resetCloseDialogState() 复位
+        self._close_dialog_pending = False
         
         # 直接初始化所有控制器 - 使用私有属性命名
         from backend.src.core.config import ModuleConfigManager
@@ -383,6 +386,16 @@ class Api:
         except Exception as e:
             logger.error(f"[setCloseBehavior] 保存关闭行为设置失败: {str(e)}")
             return {"success": False, "message": str(e)}
+    
+    def resetCloseDialogState(self) -> dict:
+        """关闭确认弹窗已关闭时复位待处理标志
+
+        由前端在弹窗关闭时调用（无论选择最小化、直接关闭弹窗还是退出程序），
+        使后续 ALT+F4 能重新按 closeBehavior 配置处理。退出程序路径由
+        closeApp() 设置的 _app_exit_requested 放行，不受本复位影响。
+        """
+        self._close_dialog_pending = False
+        return {"success": True}
     
     def closeApp(self):
         """关闭应用"""
